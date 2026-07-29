@@ -65,3 +65,31 @@ final class FingerprintSuite extends FunSuite:
       ArtifactFingerprint.from(base).value,
       ArtifactFingerprint.from(reordered).value
     )
+
+  test("artifact fingerprintability reports semantic and corpus blockers"):
+    val node = PlanNodeId.fresh()
+    val semantic =
+      Fingerprintability.Ephemeral(
+        FingerprintBlockers.one(
+          FingerprintBlocker.AnonymousProjection(node)
+        )
+      )
+
+    val result =
+      ArtifactFingerprintability.from(semantic, None) { (_, _) =>
+        fail("an incomplete artifact must not be fingerprinted")
+      }
+
+    result match
+      case ArtifactFingerprintability.Ephemeral(blockers) =>
+        assertEquals(
+          blockers.toVector,
+          Vector(
+            ArtifactFingerprintBlocker.Semantic(
+              FingerprintBlocker.AnonymousProjection(node)
+            ),
+            ArtifactFingerprintBlocker.MissingCorpusContentFingerprint
+          )
+        )
+      case ArtifactFingerprintability.Durable(_) =>
+        fail("expected artifact blockers")

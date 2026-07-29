@@ -178,7 +178,7 @@ private[grakern] object PackedGraphCorpus:
       )
     )
 
-private[grakern] enum PackedCorpusError[V]:
+enum PackedCorpusError[V]:
   case CapacityExceeded(sample: SampleKey, resource: String, requested: Long)
   case MissingNodeValue(sample: SampleKey, vertex: V)
   case MissingEdgeValue(sample: SampleKey, edge: Edge[V])

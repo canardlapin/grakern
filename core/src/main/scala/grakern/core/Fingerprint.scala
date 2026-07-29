@@ -154,3 +154,65 @@ object Fingerprintability:
         Fingerprintability.Durable(
           SemanticFingerprint.compose(schema, atoms, fingerprints)
         )
+
+enum ArtifactFingerprintBlocker derives CanEqual:
+  case Semantic(blocker: FingerprintBlocker)
+  case MissingCorpusContentFingerprint
+
+final case class ArtifactFingerprintBlockers private (
+    head: ArtifactFingerprintBlocker,
+    tail: Vector[ArtifactFingerprintBlocker]
+):
+  def toVector: Vector[ArtifactFingerprintBlocker] =
+    head +: tail
+
+object ArtifactFingerprintBlockers:
+  def fromVector(
+      blockers: Vector[ArtifactFingerprintBlocker]
+  ): Option[ArtifactFingerprintBlockers] =
+    blockers.headOption.map(head => ArtifactFingerprintBlockers(head, blockers.tail))
+
+enum ArtifactFingerprintability:
+  case Durable(fingerprint: ArtifactFingerprint)
+  case Ephemeral(blockers: ArtifactFingerprintBlockers)
+
+object ArtifactFingerprintability:
+  def from(
+      semantic: Fingerprintability,
+      corpus: Option[CorpusContentFingerprint]
+  )(
+      input: (
+          SemanticFingerprint,
+          CorpusContentFingerprint
+      ) => ArtifactFingerprintInput
+  ): ArtifactFingerprintability =
+    val semanticBlockers =
+      semantic match
+        case Fingerprintability.Durable(_) =>
+          Vector.empty
+        case Fingerprintability.Ephemeral(problems) =>
+          problems.toVector.map(ArtifactFingerprintBlocker.Semantic(_))
+    val blockers =
+      if corpus.isDefined then semanticBlockers
+      else
+        semanticBlockers :+
+          ArtifactFingerprintBlocker.MissingCorpusContentFingerprint
+
+    ArtifactFingerprintBlockers.fromVector(blockers) match
+      case Some(problems) =>
+        ArtifactFingerprintability.Ephemeral(problems)
+      case None =>
+        (semantic, corpus) match
+          case (
+                Fingerprintability.Durable(semanticFingerprint),
+                Some(corpusFingerprint)
+              ) =>
+            ArtifactFingerprintability.Durable(
+              ArtifactFingerprint.from(
+                input(semanticFingerprint, corpusFingerprint)
+              )
+            )
+          case _ =>
+            throw new IllegalStateException(
+              "fingerprint blockers were empty for an incomplete artifact identity"
+            )

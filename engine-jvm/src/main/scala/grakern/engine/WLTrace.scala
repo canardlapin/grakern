@@ -6,7 +6,7 @@ import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 import scala.collection.mutable.ArrayBuffer
 
-private[grakern] enum WLTraceError[V]:
+enum WLTraceError[V]:
   case Packing(error: PackedCorpusError[V])
   case Interning(
       level: Int,

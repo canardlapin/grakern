@@ -5,7 +5,7 @@ import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 import scala.collection.mutable.ArrayBuffer
 
-private[grakern] enum WLQueryTraceError[V]:
+enum WLQueryTraceError[V]:
   case RefinementMismatch(
       training: PlanNodeId,
       query: PlanNodeId

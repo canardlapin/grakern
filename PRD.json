@@ -487,9 +487,22 @@
       "version": "0.1.10",
       "source": "https://pypi.org/project/GraKeL/0.1.10/"
     },
+    "secondaryReferences": [
+      {
+        "package": "GraphKernels.jl",
+        "version": "v0.1.1 release baseline; exact source revision pinned by the court",
+        "source": "https://github.com/simonschoelly/GraphKernels.jl",
+        "status": "experimental package with a latest GitHub release from 2021",
+        "roles": [
+          "independent compatibility fixtures for deliberately aligned WL and shortest-path semantics",
+          "end-to-end performance comparator after input conversion, Julia startup, and compilation policy are disclosed"
+        ]
+      }
+    ],
     "execution": [
       "A pinned Python environment regenerates versioned JSON fixtures from GraKeL.",
-      "Ordinary Scala tests consume committed fixtures and do not require Python or GraKeL.",
+      "A separately pinned Julia environment regenerates versioned JSON fixtures from GraphKernels.jl for only the kernels whose semantics have been aligned from source.",
+      "Ordinary Scala tests consume committed fixtures and do not require Python, Julia, GraKeL, or GraphKernels.jl.",
       "A scheduled or explicit refresh job reruns the external oracle and fails on fixture drift.",
       "Each fixture records graph encoding, kernel parameters, train-query split, normalization, and expected matrix ordering."
     ],
@@ -498,14 +511,15 @@
       "WL optimal assignment with aligned hierarchy depth and categorical node labels",
       "vertex histogram",
       "edge histogram",
-      "categorical shortest path"
+      "categorical shortest path",
+      "GraphKernels.jl WL and shortest-path variants only after their source-level endpoint, distance, iteration, and normalization semantics are documented"
     ],
     "exclusions": [
       "query-only behavior where GraKeL does not expose the same semantic contract",
       "edge-aware WL variants until both libraries use the same signature definition",
       "any mismatch caused by documented iteration, normalization, unknown-label, or input-conversion conventions"
     ],
-    "claimPolicy": "A parity pass means Grakern reproduces the declared GraKeL configuration on the recorded fixtures. It does not establish kernel validity, prove equivalence outside those fixtures, or override Grakern's independent denotation."
+    "claimPolicy": "A parity pass means Grakern reproduces the declared external configuration on the recorded fixtures. Neither GraKeL nor GraphKernels.jl establishes kernel validity, proves equivalence outside those fixtures, or overrides Grakern's independent denotation."
   },
   "alphaScope": [
     "vertex histogram",
@@ -525,6 +539,7 @@
     "plan explanation",
     "reference and optimized differential court",
     "GraKeL parity fixtures for deliberately aligned kernels",
+    "GraphKernels.jl parity fixtures for deliberately aligned kernels",
     "end-to-end benchmarks"
   ],
   "deferred": [
@@ -546,6 +561,10 @@
     "I/O and effect modules"
   ],
   "performanceCourt": {
+    "comparators": [
+      "GraKeL 0.1.10 where a matched operation is available",
+      "GraphKernels.jl at an exact pinned revision for aligned WL and shortest-path rows"
+    ],
     "measuredOperation": [
       "graph construction or adaptation",
       "packing",
@@ -567,7 +586,13 @@
       "shallow and deep refinement",
       "sparse and increasingly dense feature matrices"
     ],
-    "claimPolicy": "No performance claim is made from microbenchmarks alone or before end-to-end semantic parity."
+    "crossLanguagePolicy": [
+      "Record language, runtime, package revision, dependency lock, graph encoding, host, thread count, and numerical checksum.",
+      "Report Julia cold startup and compilation separately from warmed steady-state execution.",
+      "Measure the same graph construction or conversion, preprocessing, Gram or cross request, and peak-memory boundary.",
+      "Publish losses, unsupported cases, and semantic exclusions as prominently as wins."
+    ],
+    "claimPolicy": "No performance claim is made from microbenchmarks alone, before end-to-end semantic parity, or from incomparable warmup and conversion boundaries."
   },
   "stopConditions": [
     "Subtree and OA require separate refinement traces.",
@@ -931,6 +956,13 @@
       "tags": ["grakern", "task", "phase-e5", "compatibility", "grakel", "differential"]
     },
     {
+      "id": "grakern-e5-graphkernels-jl-parity",
+      "title": "Build the pinned GraphKernels.jl compatibility court",
+      "priority": 1,
+      "body": "Audit GraphKernels.jl source semantics, pin an exact Julia environment and source revision, generate versioned fixtures for deliberately aligned WL behavior, and extend to shortest path only after E6 semantics align. Record graph encoding, iteration, endpoint, distance, normalization, ordering, tolerance, and exclusions; treat the package as independent compatibility evidence rather than semantic authority.",
+      "tags": ["grakern", "task", "phase-e5", "compatibility", "julia", "graphkernels-jl", "differential"]
+    },
+    {
       "id": "grakern-e5-acceptance-suite",
       "title": "Implement the full WL acceptance suite",
       "priority": 1,
@@ -1053,7 +1085,7 @@
       "id": "grakern-e7-performance-court",
       "title": "Run end-to-end semantic and performance court",
       "priority": 1,
-      "body": "Measure packing through Gram, cross, operator, and peak memory across WL feature/intersection strategies and query novelty levels; publish losses as well as wins.",
+      "body": "Measure packing through Gram, cross, operator, and peak memory across WL feature/intersection strategies and query novelty levels; include matched GraKeL and pinned GraphKernels.jl comparisons, separate Julia cold compilation from warmed execution, and publish losses as well as wins.",
       "tags": ["grakern", "task", "phase-e7", "benchmark", "performance"]
     },
     {
@@ -1240,6 +1272,7 @@
     {"child": "grakern-e5-differential-court", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-grakel-parity", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-grakel-parity", "parent": "grakern-e3-grakel-wl-parity", "kind": "blocks"},
+    {"child": "grakern-e5-graphkernels-jl-parity", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-differential-court", "kind": "blocks"},
     {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
@@ -1249,6 +1282,7 @@
     {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-histograms", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-grakel-parity", "kind": "blocks"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-graphkernels-jl-parity", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-deterministic-parallel", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-crossplatform-docs", "kind": "blocks"},
 
@@ -1339,6 +1373,7 @@
 
     {"child": "grakern-e5-differential-court", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-grakel-parity", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-graphkernels-jl-parity", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-court-hardening", "kind": "parent"},
