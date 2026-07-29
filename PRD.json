@@ -480,6 +480,33 @@
       "requirement": "Feature-backed operator application agrees with materialized Gram multiplication."
     }
   ],
+  "compatibilityCourt": {
+    "purpose": "Detect compatibility drift against deliberately aligned GraKeL behavior without treating GraKeL as the semantic oracle.",
+    "reference": {
+      "package": "GraKeL",
+      "version": "0.1.10",
+      "source": "https://pypi.org/project/GraKeL/0.1.10/"
+    },
+    "execution": [
+      "A pinned Python environment regenerates versioned JSON fixtures from GraKeL.",
+      "Ordinary Scala tests consume committed fixtures and do not require Python or GraKeL.",
+      "A scheduled or explicit refresh job reruns the external oracle and fails on fixture drift.",
+      "Each fixture records graph encoding, kernel parameters, train-query split, normalization, and expected matrix ordering."
+    ],
+    "firstTargets": [
+      "WL subtree with aligned round convention and categorical node labels",
+      "WL optimal assignment with aligned hierarchy depth and categorical node labels",
+      "vertex histogram",
+      "edge histogram",
+      "categorical shortest path"
+    ],
+    "exclusions": [
+      "query-only behavior where GraKeL does not expose the same semantic contract",
+      "edge-aware WL variants until both libraries use the same signature definition",
+      "any mismatch caused by documented iteration, normalization, unknown-label, or input-conversion conventions"
+    ],
+    "claimPolicy": "A parity pass means Grakern reproduces the declared GraKeL configuration on the recorded fixtures. It does not establish kernel validity, prove equivalence outside those fixtures, or override Grakern's independent denotation."
+  },
   "alphaScope": [
     "vertex histogram",
     "edge histogram",
@@ -497,6 +524,7 @@
     "provenance",
     "plan explanation",
     "reference and optimized differential court",
+    "GraKeL parity fixtures for deliberately aligned kernels",
     "end-to-end benchmarks"
   ],
   "deferred": [
@@ -514,6 +542,7 @@
     "GPU execution",
     "Ravel integration",
     "Alder integration",
+    "commute-time and resistance-distance kernels",
     "I/O and effect modules"
   ],
   "performanceCourt": {
@@ -553,6 +582,8 @@
     "Gale types leak into grakern-core.",
     "Ravel becomes necessary merely to represent matrices.",
     "Compiler optimization requires unreported floating reassociation.",
+    "A GraKeL compatibility fixture is used as the semantic definition of a kernel.",
+    "A within-graph commute-time node kernel is mislabeled as a kernel between graph samples.",
     "Packing requires access to graph4s private arrays.",
     "A specialized lowering lacks an independent denotation.",
     "The feature-backed operator disagrees with the Gram realization beyond tolerance."
@@ -816,6 +847,13 @@
       "tags": ["grakern", "gate", "acceptance", "phase-e3"]
     },
     {
+      "id": "grakern-e3-grakel-wl-parity",
+      "title": "Bootstrap pinned GraKeL WL parity fixtures",
+      "priority": 0,
+      "body": "Generate committed GraKeL 0.1.10 fixtures for the aligned WL subtree and WL optimal-assignment pair/path corpus, add ordinary Scala regression tests that consume the JSON without Python, and provide an explicit pinned regeneration check.",
+      "tags": ["grakern", "task", "phase-e3", "compatibility", "grakel", "wl"]
+    },
+    {
       "id": "grakern-e4-engine",
       "title": "E4 Closed compiler, Gale outputs, and query alignment",
       "priority": 0,
@@ -884,6 +922,13 @@
       "priority": 1,
       "body": "Compare scalar semantics, LCA hierarchy, Hungarian OA, histogram intersection, threshold dots, direct-sum features, Gram, operator, cross, and normalization through independent paths.",
       "tags": ["grakern", "task", "phase-e5", "laws", "differential"]
+    },
+    {
+      "id": "grakern-e5-grakel-parity",
+      "title": "Build the pinned GraKeL compatibility court",
+      "priority": 1,
+      "body": "Generate versioned fixtures with GraKeL 0.1.10 for deliberately aligned kernels; record graph encodings, parameters, ordering, train-query splits, normalization, tolerances, and exclusions; consume committed fixtures from Scala tests without making GraKeL the semantic oracle.",
+      "tags": ["grakern", "task", "phase-e5", "compatibility", "grakel", "differential"]
     },
     {
       "id": "grakern-e5-acceptance-suite",
@@ -1080,6 +1125,48 @@
       "priority": 3,
       "body": "Add GPU execution only for an existing semantic node with reference agreement, transfer-inclusive benchmarks, capability reporting, and no GPU type leakage into core.",
       "tags": ["grakern", "task", "phase-e8", "gpu", "performance"]
+    },
+    {
+      "id": "grakern-e9-commute-time",
+      "title": "E9 Commute-time and resistance-distance kernels",
+      "priority": 2,
+      "body": "Add Laplacian-pseudoinverse commute-time kernels after first separating the lawful within-graph vertex kernel from any kernel between graph samples. Implement only graph-level lifts with an explicit denotation, independent reference, and invariance proof.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e9", "commute-time", "spectral"]
+    },
+    {
+      "id": "grakern-e9-semantics",
+      "title": "Freeze commute-time domain and graph-level lift semantics",
+      "priority": 1,
+      "body": "Specify the weighted undirected graph contract, connected and disconnected behavior, Laplacian convention, volume scaling, the within-graph vertex kernel L+, its induced resistance or commute-time pseudometric, and any separate lawful lift that compares whole graph samples.",
+      "tags": ["grakern", "task", "phase-e9", "commute-time", "semantics", "adr"]
+    },
+    {
+      "id": "grakern-e9-reference",
+      "title": "Implement independent commute-time reference evaluator",
+      "priority": 2,
+      "body": "Compute small-graph Laplacians and Moore-Penrose pseudoinverses through an independent dense path; verify analytic paths, cycles, weighted graphs, component policy, PSD, centering, reindexing invariance, and effective-resistance identities.",
+      "tags": ["grakern", "task", "phase-e9", "commute-time", "reference", "gale"]
+    },
+    {
+      "id": "grakern-e9-lowering",
+      "title": "Implement exact and scalable commute-time lowerings",
+      "priority": 2,
+      "body": "Add the approved semantic node, Gale-backed dense spectral lowering, operator or linear-solve realization where justified, capability reporting, conditioning diagnostics, and deterministic numerical tolerances.",
+      "tags": ["grakern", "task", "phase-e9", "commute-time", "compiler", "spectral"]
+    },
+    {
+      "id": "grakern-e9-graph-lift",
+      "title": "Implement the approved graph-sample commute-time recipe",
+      "priority": 2,
+      "body": "Implement only the graph-level lift accepted by the semantics task, with a reference denotation, exact sample and feature identity, query behavior, provenance, and no comparison of unrelated raw L+ coordinates.",
+      "tags": ["grakern", "task", "phase-e9", "commute-time", "graph-kernel"]
+    },
+    {
+      "id": "grakern-gate-h",
+      "title": "Gate H: commute-time semantics and lowerings certified",
+      "priority": 1,
+      "body": "Pass when the within-graph kernel and graph-sample lift are not conflated, analytic and independent references agree, PSD and reindexing laws pass, disconnected and weighted behavior is explicit, and optimized lowerings report numerical limitations honestly.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e9", "commute-time"]
     }
   ],
   "deps": [
@@ -1131,6 +1218,7 @@
     {"child": "grakern-gate-d", "parent": "grakern-e3-directsum-normalize", "kind": "blocks"},
     {"child": "grakern-gate-d", "parent": "grakern-e3-provenance", "kind": "blocks"},
     {"child": "grakern-gate-d", "parent": "grakern-e3-oa-oracle", "kind": "blocks"},
+    {"child": "grakern-e3-grakel-wl-parity", "parent": "grakern-gate-d", "kind": "blocks"},
 
     {"child": "grakern-e4-engine", "parent": "grakern-gate-d", "kind": "blocks"},
     {"child": "grakern-e4-compiler", "parent": "grakern-gate-d", "kind": "blocks"},
@@ -1150,6 +1238,8 @@
 
     {"child": "grakern-e5-court-hardening", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-differential-court", "parent": "grakern-gate-e", "kind": "blocks"},
+    {"child": "grakern-e5-grakel-parity", "parent": "grakern-gate-e", "kind": "blocks"},
+    {"child": "grakern-e5-grakel-parity", "parent": "grakern-e3-grakel-wl-parity", "kind": "blocks"},
     {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-gate-e", "kind": "blocks"},
     {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-differential-court", "kind": "blocks"},
     {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
@@ -1158,6 +1248,7 @@
     {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-generic-extraction", "kind": "blocks"},
     {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-histograms", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-grakel-parity", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-deterministic-parallel", "kind": "blocks"},
     {"child": "grakern-gate-f", "parent": "grakern-e5-crossplatform-docs", "kind": "blocks"},
 
@@ -1189,7 +1280,16 @@
     {"child": "grakern-e8-random-walk", "parent": "grakern-gate-alpha", "kind": "blocks"},
     {"child": "grakern-e8-directed", "parent": "grakern-gate-alpha", "kind": "blocks"},
     {"child": "grakern-e8-adapters", "parent": "grakern-gate-alpha", "kind": "blocks"},
-    {"child": "grakern-e8-gpu", "parent": "grakern-e8-random-walk", "kind": "blocks"}
+    {"child": "grakern-e8-gpu", "parent": "grakern-e8-random-walk", "kind": "blocks"},
+
+    {"child": "grakern-e9-commute-time", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e9-semantics", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e9-reference", "parent": "grakern-e9-semantics", "kind": "blocks"},
+    {"child": "grakern-e9-lowering", "parent": "grakern-e9-reference", "kind": "blocks"},
+    {"child": "grakern-e9-graph-lift", "parent": "grakern-e9-semantics", "kind": "blocks"},
+    {"child": "grakern-e9-graph-lift", "parent": "grakern-e9-lowering", "kind": "blocks"},
+    {"child": "grakern-gate-h", "parent": "grakern-e9-reference", "kind": "blocks"},
+    {"child": "grakern-gate-h", "parent": "grakern-e9-graph-lift", "kind": "blocks"}
   ],
   "relations": [
     {"child": "grakern-plan-prd", "parent": "grakern-e0-architecture", "kind": "parent"},
@@ -1227,6 +1327,7 @@
     {"child": "grakern-e3-directsum-normalize", "parent": "grakern-e3-wl-features", "kind": "parent"},
     {"child": "grakern-e3-provenance", "parent": "grakern-e3-wl-features", "kind": "parent"},
     {"child": "grakern-gate-d", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-grakel-wl-parity", "parent": "grakern-e3-wl-features", "kind": "parent"},
 
     {"child": "grakern-e4-compiler", "parent": "grakern-e4-engine", "kind": "parent"},
     {"child": "grakern-e4-plan-identities", "parent": "grakern-e4-engine", "kind": "parent"},
@@ -1237,6 +1338,7 @@
     {"child": "grakern-gate-e", "parent": "grakern-e4-engine", "kind": "parent"},
 
     {"child": "grakern-e5-differential-court", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-grakel-parity", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-e5-court-hardening", "kind": "parent"},
     {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-court-hardening", "kind": "parent"},
@@ -1264,6 +1366,12 @@
     {"child": "grakern-e8-random-walk", "parent": "grakern-e8-post-alpha", "kind": "parent"},
     {"child": "grakern-e8-directed", "parent": "grakern-e8-post-alpha", "kind": "parent"},
     {"child": "grakern-e8-adapters", "parent": "grakern-e8-post-alpha", "kind": "parent"},
-    {"child": "grakern-e8-gpu", "parent": "grakern-e8-post-alpha", "kind": "parent"}
+    {"child": "grakern-e8-gpu", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+
+    {"child": "grakern-e9-semantics", "parent": "grakern-e9-commute-time", "kind": "parent"},
+    {"child": "grakern-e9-reference", "parent": "grakern-e9-commute-time", "kind": "parent"},
+    {"child": "grakern-e9-lowering", "parent": "grakern-e9-commute-time", "kind": "parent"},
+    {"child": "grakern-e9-graph-lift", "parent": "grakern-e9-commute-time", "kind": "parent"},
+    {"child": "grakern-gate-h", "parent": "grakern-e9-commute-time", "kind": "parent"}
   ]
 }

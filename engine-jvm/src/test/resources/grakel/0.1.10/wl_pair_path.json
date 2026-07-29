@@ -1,0 +1,93 @@
+{
+  "comparison_policy": {
+    "absolute_tolerance": 1e-12,
+    "authority": "compatibility evidence, not semantic oracle",
+    "relative_tolerance": 1e-12
+  },
+  "gram_shape": [
+    2,
+    2
+  ],
+  "oracle": {
+    "distribution": "GraKeL",
+    "distribution_version": "0.1.10",
+    "module_version": "0.1.8",
+    "numpy_version": "1.26.4",
+    "python_version": "3.11"
+  },
+  "samples": [
+    {
+      "edges": [
+        [
+          0,
+          1
+        ]
+      ],
+      "key": "pair",
+      "node_labels": [
+        "C",
+        "C"
+      ]
+    },
+    {
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ]
+      ],
+      "key": "path",
+      "node_labels": [
+        "C",
+        "O",
+        "C"
+      ]
+    }
+  ],
+  "schema_version": "grakern.grakel-fixture.v1",
+  "semantics": {
+    "edge_labels": false,
+    "normalization": false,
+    "rounds": 2,
+    "sample_order": [
+      "pair",
+      "path"
+    ],
+    "split": {
+      "query": [],
+      "train": [
+        "pair",
+        "path"
+      ]
+    },
+    "wl_optimal_assignment": {
+      "n_iter": 2,
+      "name": "weisfeiler_lehman_optimal_assignment"
+    },
+    "wl_subtree": [
+      {
+        "n_iter": 2,
+        "name": "weisfeiler_lehman"
+      },
+      {
+        "name": "subtree_wl"
+      }
+    ]
+  },
+  "wl_optimal_assignment_gram_flat": [
+    6.0,
+    2.0,
+    2.0,
+    9.0
+  ],
+  "wl_subtree_gram_flat": [
+    12.0,
+    4.0,
+    4.0,
+    15.0
+  ]
+}

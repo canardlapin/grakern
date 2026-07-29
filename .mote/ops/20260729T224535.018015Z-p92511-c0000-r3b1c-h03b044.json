@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e3-subtree","kind":"note","note_kind":"progress","op":"20260729T224535.018015Z-p92511-c0000-r3b1c-h03b044","text":"Implemented exact sparse subtree rows keyed by round and trace-owned signature, square-root nonnegative round weights, dot-product reconstruction, and source occurrence provenance.","ts":"2026-07-29T22:45:35.018015Z","v":1}

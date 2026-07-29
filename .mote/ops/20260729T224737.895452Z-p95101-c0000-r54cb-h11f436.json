@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e3-oa-intersection","kind":"note","note_kind":"progress","op":"20260729T224737.895452Z-p95101-c0000-r54cb-h11f436","text":"Implemented incremental-height WL hierarchy intersection and compared all corpus graph pairs against the independent Hungarian oracle.","ts":"2026-07-29T22:47:37.895452Z","v":1}
