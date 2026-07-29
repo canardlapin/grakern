@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e6-bfs-apsp","kind":"create","op":"20260729T194631.666209Z-p9329-c0149-racae-h4135a1","set":{"body":"Compute exact integer all-pairs distances once per graph and share the transform across path-kernel consumers.","priority":1,"status":"open","title":"Implement shared unweighted BFS APSP"},"ts":"2026-07-29T19:46:31.666209Z","v":1}

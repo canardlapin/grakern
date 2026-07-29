@@ -1,0 +1,1269 @@
+{
+  "schemaVersion": "grakern.prd.v1",
+  "title": "Grakern: A Lawful Graph-Kernel Calculus and Compiler",
+  "status": "approved-for-implementation",
+  "decision": "proceed",
+  "date": "2026-07-29",
+  "productThesis": "Grakern is a small calculus of lawful kernels and graph decompositions together with a compiler that lowers semantic expressions to exact sparse features, hierarchy intersection, Gale operators, or pairwise plans. Standard graph kernels are recipes over shared semantic computations rather than isolated estimator classes.",
+  "irreducibleCore": [
+    "Kernel",
+    "Decomposition",
+    "Refinement",
+    "Hierarchy",
+    "Compiler"
+  ],
+  "successCriterion": "One exact semantic computation supports multiple lawful kernels, multiple numerical views, correct out-of-sample behavior, and one optimized execution plan without duplicating algorithm-specific machinery.",
+  "firstArchitecturalProof": {
+    "name": "Paired Weisfeiler-Lehman subtree and optimal-assignment slice",
+    "requiredOutcome": "One immutable exact WL refinement trace feeds exact subtree features and exact threshold-expanded optimal-assignment features, which combine by direct sum and produce a Gale Gram matrix, a Gale-backed operator, correct train-query cross values, complete query norms, and intelligible provenance.",
+    "failurePolicy": "If this slice requires duplicated traces, mutable query state, opaque pattern identity, or algorithm-specific preparation paths, reopen the architecture ADRs before adding more kernels."
+  },
+  "principles": [
+    "Mathematical semantics and finite computational realizations are separate contracts.",
+    "Graph identity is distinct from node and edge data.",
+    "Session sharing, semantic reproducibility, and prepared-artifact identity are distinct.",
+    "Exact feature availability is a planned capability, not a type-level property of every kernel.",
+    "Mathematical closure laws do not authorize floating-point reassociation.",
+    "Gale owns matrices, sparse matrices, vectors, operators, and numerical backends.",
+    "Grakern owns kernel semantics, sample alignment, feature identity, query alignment, provenance, audits, and plan explanations.",
+    "Ravel is not an initial dependency.",
+    "Every specialized semantic node has an independent denotation and reference interpreter.",
+    "The v0.1 compiler is closed and exhaustively matched."
+  ],
+  "dependencyBaseline": {
+    "scala": "3.7.4",
+    "jdk": 21,
+    "graph4s": {
+      "revision": "ea5d2d762f85f5a0f97ee188deb5fac0ef2bcbaf",
+      "status": "unpublished clean source dependency",
+      "allowedConsumers": [
+        "grakern-graph4s"
+      ]
+    },
+    "gale": {
+      "revision": "d55fe2f97196a76ab7879e1a12f1e92403aeba06",
+      "status": "unpublished clean source dependency",
+      "allowedConsumers": [
+        "grakern-engine-jvm"
+      ],
+      "prohibition": "Do not build reproducible Grakern artifacts against unrelated dirty sibling-worktree changes."
+    },
+    "ravel": {
+      "dependency": false,
+      "reason": "Dense and sparse mathematical matrix ownership belongs to Gale; Grakern has no initial n-dimensional array requirement."
+    }
+  },
+  "modules": [
+    {
+      "name": "grakern-core",
+      "platforms": [
+        "JVM",
+        "Scala.js",
+        "Scala Native"
+      ],
+      "owns": [
+        "PairScore",
+        "Similarity",
+        "Kernel",
+        "StrongKernel",
+        "validated finite scalars",
+        "Projection durability",
+        "KernelExpr",
+        "Decomposition",
+        "generic Refinement contracts",
+        "generic Hierarchy",
+        "FiniteBag",
+        "reference interpreters"
+      ],
+      "mustNotDependOn": [
+        "graph4s",
+        "Gale",
+        "Ravel",
+        "Cats Effect",
+        "FS2"
+      ]
+    },
+    {
+      "name": "grakern-graph4s",
+      "platforms": [
+        "JVM",
+        "Scala.js",
+        "Scala Native"
+      ],
+      "owns": [
+        "GraphSample",
+        "graph4s field integration",
+        "graph boundary validation",
+        "packing interfaces"
+      ],
+      "dependsOn": [
+        "grakern-core",
+        "graph4s-core",
+        "graph4s-indexed",
+        "graph4s-data"
+      ]
+    },
+    {
+      "name": "grakern-standard",
+      "platforms": [
+        "JVM",
+        "Scala.js",
+        "Scala Native"
+      ],
+      "owns": [
+        "vertex and edge histograms",
+        "WL refinement",
+        "WL subtree",
+        "WL optimal assignment",
+        "shortest-path recipes"
+      ],
+      "dependsOn": [
+        "grakern-core",
+        "grakern-graph4s"
+      ]
+    },
+    {
+      "name": "grakern-engine-jvm",
+      "platforms": [
+        "JVM"
+      ],
+      "owns": [
+        "closed compiler",
+        "packed-corpus execution",
+        "exact sparse features",
+        "Gale matrices and operators",
+        "deterministic parallel execution",
+        "plan reporting"
+      ],
+      "dependsOn": [
+        "grakern-core",
+        "grakern-graph4s",
+        "grakern-standard",
+        "gale-core"
+      ]
+    },
+    {
+      "name": "grakern-laws",
+      "platforms": [
+        "JVM",
+        "Scala.js",
+        "Scala Native"
+      ],
+      "owns": [
+        "semantic laws",
+        "graph invariance",
+        "refinement identity",
+        "preparation coherence",
+        "optimized-reference differential tests"
+      ]
+    },
+    {
+      "name": "grakern-benchmarks",
+      "platforms": [
+        "JVM"
+      ],
+      "published": false,
+      "owns": [
+        "end-to-end performance court",
+        "memory and allocation receipts",
+        "compatibility comparisons"
+      ]
+    }
+  ],
+  "semanticContracts": {
+    "pairwiseTypes": [
+      {
+        "name": "PairScore[A]",
+        "claim": "Arbitrary real-valued pair score; may be asymmetric."
+      },
+      {
+        "name": "Similarity[A]",
+        "claim": "Symmetric score by safe construction."
+      },
+      {
+        "name": "Kernel[A]",
+        "claim": "Symmetric positive-semidefinite kernel by safe construction."
+      },
+      {
+        "name": "StrongKernel[A]",
+        "claim": "Nonnegative kernel satisfying the strong-kernel inequality."
+      }
+    ],
+    "unsafeBoundary": [
+      "unsafe.assumeSimilarity",
+      "unsafe.assumeKernel",
+      "unsafe.assumeStrongKernel"
+    ],
+    "strongKernelRules": [
+      "StrongKernel is a semantic claim and is not identified with a finite hierarchy.",
+      "A finite hierarchy is a certified realization that enables histogram-intersection lowering.",
+      "Delta is strong on any lawful equality domain without globally enumerating that domain.",
+      "Strong pullback and nonnegative constant scaling preserve StrongKernel.",
+      "Sum and product of strong kernels return Kernel.",
+      "Normalization and induced Gaussianization return Kernel.",
+      "Optimal assignment accepts StrongKernel and uses hierarchy intersection when realizable or padded Hungarian assignment otherwise."
+    ],
+    "decomposition": {
+      "v0_1Weights": "NonNegativeFinite",
+      "denotation": "finite nonnegative measure over patterns",
+      "requiredOperations": [
+        "map",
+        "flatMap",
+        "filter",
+        "reweight",
+        "convolve"
+      ],
+      "execution": "Fused fold or emitter; materialization exists only for reference testing.",
+      "deferred": "Signed coefficients will use a separate FiniteLinearCombination abstraction."
+    }
+  },
+  "graphContract": {
+    "v0_1": [
+      "finite",
+      "simple",
+      "loopless",
+      "undirected",
+      "immutable during preparation",
+      "total node field",
+      "total edge field"
+    ],
+    "preferredType": "GraphSample[V, N, E]",
+    "identityRule": "V is graph-local identity; N and E are attributes. Equal N values never merge vertices.",
+    "factoryRule": "The preferred factory receives one graph4s.Graph[V] and derives total node and edge fields from total functions.",
+    "sampleScoping": "Different samples may reuse the same V values. Corpus packing assigns disjoint internal offsets.",
+    "packedOwnership": "PackedGraphCorpus is private Grakern execution state and not a second public graph model.",
+    "genericGraphSource": "Deferred until the graph4s walking slice proves the boundary."
+  },
+  "hierarchyAndAssignment": {
+    "finiteHierarchyValidation": [
+      "finite node set",
+      "exactly one root",
+      "no cycles",
+      "complete reachability",
+      "parent membership",
+      "leaf membership",
+      "injective item-to-leaf association",
+      "finite monotone heights",
+      "exact duplicate and multiplicity handling"
+    ],
+    "rootPolicy": "Root height is finite and nonnegative but need not be zero.",
+    "paddingPolicy": "Unequal bags are padded semantically with an external zero-feature dummy that is not required to be a hierarchy leaf.",
+    "histogramFormula": "Sum over hierarchy nodes of incrementalHeight(node) * min(countLeft(node), countRight(node)).",
+    "thresholdFeature": "HierarchyFeature(node, multiplicityThreshold) has value sqrt(incrementalHeight(node)) when the bag count below node reaches that threshold.",
+    "thresholdComplexity": "The number of active threshold features for a bag is O(number of items times hierarchy depth)."
+  },
+  "identityAndFingerprinting": {
+    "levels": [
+      {
+        "name": "PlanNodeId",
+        "availability": "always",
+        "purpose": "session-local common-subexpression sharing"
+      },
+      {
+        "name": "SemanticFingerprint",
+        "availability": "only when every semantic component has a stable descriptor",
+        "purpose": "identify the represented denotation to the degree asserted by descriptors"
+      },
+      {
+        "name": "ArtifactFingerprint",
+        "availability": "only when semantic and corpus identity are durable",
+        "purpose": "identify a prepared artifact"
+      }
+    ],
+    "artifactInputs": [
+      "semantic fingerprint",
+      "corpus content fingerprint",
+      "sample ordering",
+      "compiler schema",
+      "lowering schema",
+      "numerical policy",
+      "approximation and seed",
+      "engine version"
+    ],
+    "projectionPolicy": [
+      "Projection.of creates an ephemeral projection.",
+      "Projection.named carries a user-asserted stable id and version.",
+      "A name and version do not prove that the closure implementation is unchanged.",
+      "Anonymous closures remain executable and disable durable caching when necessary."
+    ],
+    "reporting": "Plan reports enumerate every fingerprint blocker."
+  },
+  "refinementContract": {
+    "semanticIdentity": "Exact recursive signatures and their parent relation are semantics; integer colours are trace-local encodings.",
+    "initialSignature": "nodeKey(vertex)",
+    "nextSignature": "previous own signature plus the exact multiset of edge-key and neighbor-signature pairs",
+    "requirements": [
+      "hashes accelerate lookup but never define equality",
+      "collisions resolve through exact structural comparison",
+      "colour ids never escape without their owning trace",
+      "parent links connect adjacent exact signatures",
+      "training trace and interner are immutable",
+      "query refinement uses an immutable overlay or fork",
+      "concurrent query batches cannot change prepared state",
+      "query-only descendants may share known ancestors",
+      "persistent signatures require stable codecs",
+      "anonymous labels may disable durable fingerprints"
+    ],
+    "representationConstraint": "Use hash-consed or interned DAG nodes; do not repeatedly materialize recursive signature trees."
+  },
+  "numericalContract": {
+    "validatedTypes": [
+      "FiniteDouble",
+      "NonNegativeFinite",
+      "PositiveFinite"
+    ],
+    "nonFinitePolicy": "Reject NaN and both infinities at validated boundaries.",
+    "negativeZeroPolicy": "Canonicalize negative zero to positive zero in nonnegative wrappers unless an ADR-approved operation requires raw signed zero.",
+    "projectionValidation": "Validate projected numeric values once during packing or preparation and then use trusted primitive columns.",
+    "normalization": {
+      "negativeDiagonal": "A diagonal below minus epsilon is an error.",
+      "nearZeroDiagonal": "A diagonal with absolute value at most epsilon is treated as zero and records an audit event.",
+      "positiveDiagonal": "Normalize normally.",
+      "zeroNorm": "All normalized values involving a zero-norm object are zero, including its self-kernel.",
+      "clipping": "Do not silently clip to [-1, 1]."
+    },
+    "floatingExecution": [
+      "Preserve expression order.",
+      "Do not distribute products over sums.",
+      "Do not reassociate sums merely because mathematical closure permits it.",
+      "Use deterministic partitioning and fixed reduction trees.",
+      "Use exact equality for combinatorial identities and declared tolerances for general numeric primitives.",
+      "Do not publish a Cats CommutativeSemiring instance in v0.1."
+    ]
+  },
+  "preparedOutputs": {
+    "views": [
+      "gram",
+      "cross(query)",
+      "operator",
+      "features",
+      "capabilities",
+      "planReport"
+    ],
+    "featureCapability": "prepared.features returns a typed unavailable result when no selected exact realization exists.",
+    "operatorCapability": "An operator is semantically available for every finite reference corpus and may be feature-backed, Gram-backed, or pairwise-tiled.",
+    "trainingFeatures": {
+      "type": "FeatureMatrix",
+      "fields": [
+        "gale.CSR values",
+        "SampleIndex rows",
+        "FeatureDictionary columns",
+        "FeatureMetadata metadata"
+      ]
+    },
+    "queryFeatures": {
+      "type": "AlignedFeatures",
+      "fields": [
+        "gale.CSR shared",
+        "gale.DVec novelSquaredNorm"
+      ],
+      "rule": "Query-only coordinates contribute to complete query norms but not nonexistent train-query cross terms."
+    },
+    "galeOwnership": [
+      "DMat",
+      "DVec",
+      "CSR",
+      "DoubleLinearOperator"
+    ],
+    "grakernOwnership": [
+      "sample ordering",
+      "feature identity",
+      "kernel identity",
+      "centering and normalization state",
+      "query alignment",
+      "provenance",
+      "audit results",
+      "approximation metadata",
+      "plan explanations"
+    ]
+  },
+  "compilerContract": {
+    "v0_1Shape": "Closed internal GADT or sealed hierarchy with exhaustive compiler matching.",
+    "initialNodes": [
+      "Primitive",
+      "Pullback",
+      "Scale",
+      "Sum",
+      "Product",
+      "Normalize",
+      "WLRefinement",
+      "WLSubtree",
+      "WLOptimalAssignment",
+      "DirectSumFeatures"
+    ],
+    "prohibitions": [
+      "no public lowering SPI",
+      "no matches-then-cast lowering",
+      "no untyped algorithm escape hatch",
+      "no generic rewrite framework before two vertical slices"
+    ],
+    "specializedNodeRule": "A specialized semantic primitive is acceptable when it has an independent denotation and reference interpreter."
+  },
+  "walkingSlice": {
+    "pipeline": [
+      "GraphSample",
+      "PackedGraphCorpus",
+      "exact immutable WL trace",
+      "WL subtree sparse features",
+      "WL OA hierarchy evaluator",
+      "WL OA threshold features",
+      "direct-sum feature matrix",
+      "normalization",
+      "Gale Gram matrix",
+      "Gale operator",
+      "train-query aligned features and cross matrix",
+      "provenance and plan report"
+    ],
+    "planInvariant": "One WL refinement plan node has two consumers.",
+    "queryCases": [
+      "unseen subtree signature",
+      "unseen final hierarchy leaf",
+      "known ancestor with unknown descendant",
+      "multiplicity threshold larger than any training graph"
+    ]
+  },
+  "acceptanceCourt": [
+    {
+      "name": "vertex-reindexing invariance",
+      "requirement": "Arbitrary graph vertex permutations preserve kernel values."
+    },
+    {
+      "name": "exact collision handling",
+      "requirement": "A deliberately constant or adversarial hash does not change results."
+    },
+    {
+      "name": "shared execution",
+      "requirement": "Subtree plus OA executes one refinement per graph and round."
+    },
+    {
+      "name": "OA oracle",
+      "requirement": "Hierarchy intersection agrees with padded Hungarian assignment on repeated and unequal bags."
+    },
+    {
+      "name": "reference differential",
+      "requirement": "Independent scalar denotation and optimized feature realizations agree."
+    },
+    {
+      "name": "train-cross coherence",
+      "requirement": "cross(train) agrees with gram under the declared numerical policy."
+    },
+    {
+      "name": "query-only feature norm",
+      "requirement": "Unseen query features alter query self-kernels but not unmatched cross terms."
+    },
+    {
+      "name": "ancestor sharing",
+      "requirement": "Unseen query leaves receive partial OA similarity through shared known ancestors."
+    },
+    {
+      "name": "feature reconstruction",
+      "requirement": "Subtree and threshold OA feature dot products reconstruct component kernels."
+    },
+    {
+      "name": "deterministic execution",
+      "requirement": "Fixed partitioning and reduction trees yield reproducible results."
+    },
+    {
+      "name": "provenance",
+      "requirement": "Every nonzero contribution traces to round, signature, hierarchy node, and threshold."
+    },
+    {
+      "name": "plan sharing",
+      "requirement": "The plan contains one WL node and two consumers."
+    },
+    {
+      "name": "prepared immutability",
+      "requirement": "Repeated and concurrent query overlays do not mutate prepared training state."
+    },
+    {
+      "name": "operator agreement",
+      "requirement": "Feature-backed operator application agrees with materialized Gram multiplication."
+    }
+  ],
+  "alphaScope": [
+    "vertex histogram",
+    "edge histogram",
+    "WL subtree",
+    "WL optimal assignment",
+    "unweighted categorical shortest path",
+    "soft shortest path when the exact pairwise path is ready",
+    "Gram matrix",
+    "cross matrix",
+    "exact features where available",
+    "operator",
+    "normalization",
+    "prepared centering",
+    "query alignment",
+    "provenance",
+    "plan explanation",
+    "reference and optimized differential court",
+    "end-to-end benchmarks"
+  ],
+  "deferred": [
+    "directed attributed graphs",
+    "generic GraphSource",
+    "public lowering plugins",
+    "Cats CommutativeSemiring",
+    "signed decomposition measures",
+    "graphlets and sampling",
+    "Nyström",
+    "random Fourier features",
+    "TensorSketch",
+    "memory-mapped matrices",
+    "random-walk solvers",
+    "GPU execution",
+    "Ravel integration",
+    "Alder integration",
+    "I/O and effect modules"
+  ],
+  "performanceCourt": {
+    "measuredOperation": [
+      "graph construction or adaptation",
+      "packing",
+      "refinement or APSP",
+      "feature extraction",
+      "Gram",
+      "query cross",
+      "operator application",
+      "peak memory"
+    ],
+    "requiredRows": [
+      "WL subtree alone",
+      "WL OA pairwise intersection",
+      "WL OA threshold features",
+      "combined WL direct-sum features",
+      "combined feature-backed operator",
+      "query cross at several novel-feature rates",
+      "adversarial high multiplicity",
+      "shallow and deep refinement",
+      "sparse and increasingly dense feature matrices"
+    ],
+    "claimPolicy": "No performance claim is made from microbenchmarks alone or before end-to-end semantic parity."
+  },
+  "stopConditions": [
+    "Subtree and OA require separate refinement traces.",
+    "Query evaluation mutates prepared training state.",
+    "Vertex permutation changes exact kernel values.",
+    "Hash collisions change feature or hierarchy identity.",
+    "A colour id escapes without its owning trace.",
+    "Anonymous closures obtain durable fingerprints.",
+    "Corpus artifacts are keyed only by sample names.",
+    "WL OA is exposed as linear features without a valid feature map.",
+    "Query-only features are omitted from normalized query norms.",
+    "Gale types leak into grakern-core.",
+    "Ravel becomes necessary merely to represent matrices.",
+    "Compiler optimization requires unreported floating reassociation.",
+    "Packing requires access to graph4s private arrays.",
+    "A specialized lowering lacks an independent denotation.",
+    "The feature-backed operator disagrees with the Gram realization beyond tolerance."
+  ],
+  "tracker": {
+    "format": "mote-import-v1",
+    "actor": "codex-grakern",
+    "bootstrapBead": "grakern-plan-prd",
+    "policy": [
+      "Epics are non-blocking parent containers.",
+      "Gate issues carry the actual blocking dependencies.",
+      "A later epic and each of its root tasks are blocked by the previous gate.",
+      "Closing an epic is distinct from closing its children or passing its gate.",
+      "PRD, Git, Mote, and publication state are reported independently."
+    ]
+  },
+  "beads": [
+    {
+      "id": "grakern-e0-architecture",
+      "title": "E0 Architecture freeze and project foundation",
+      "priority": 0,
+      "body": "Bootstrap the project and freeze six executable ADRs before kernel implementation. Exit through Gate A only after compiling positive and negative contract probes.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e0", "architecture"]
+    },
+    {
+      "id": "grakern-e0-bootstrap",
+      "title": "Bootstrap reproducible multi-module build and CI",
+      "priority": 0,
+      "body": "Initialize Git and the Typelevel-style Scala 3.7.4 build, add JVM/JS/Native semantic modules and JVM engine scaffolding, pin clean graph4s and Gale source revisions, and add baseline format/compile/test checks.",
+      "tags": ["grakern", "task", "phase-e0", "build", "ci"]
+    },
+    {
+      "id": "grakern-e0-adr-graph",
+      "title": "ADR-001 Graph identity and GraphSample",
+      "priority": 0,
+      "body": "Freeze graph-local identity, total node and edge fields, topology-first construction, sample scoping, and private corpus packing.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "graph4s"]
+    },
+    {
+      "id": "grakern-e0-adr-strong",
+      "title": "ADR-002 Strong kernels, hierarchy, bags, and optimal assignment",
+      "priority": 0,
+      "body": "Separate StrongKernel semantics from finite hierarchy realization; specify positive-root hierarchies, external-zero padding, multiplicities, Hungarian fallback, and histogram-intersection capability.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "kernel", "hierarchy"]
+    },
+    {
+      "id": "grakern-e0-adr-identity",
+      "title": "ADR-003 Plan, semantic, and artifact identity",
+      "priority": 0,
+      "body": "Freeze PlanNodeId, SemanticFingerprint, ArtifactFingerprint, projection durability, corpus content identity, and explicit fingerprint blockers.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "fingerprint"]
+    },
+    {
+      "id": "grakern-e0-adr-numerical",
+      "title": "ADR-004 Numerical domain, normalization, and decomposition weights",
+      "priority": 0,
+      "body": "Freeze finite scalar validation, negative-zero handling, checked preparation, zero-norm normalization, deterministic floating schedules, and nonnegative v0.1 decomposition weights.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "numerics"]
+    },
+    {
+      "id": "grakern-e0-adr-prepared",
+      "title": "ADR-005 Prepared capabilities and Gale ownership",
+      "priority": 0,
+      "body": "Freeze optional exact features, universal operator semantics, FeatureMatrix, AlignedFeatures, novelSquaredNorm, Gale payload ownership, Grakern metadata ownership, and Alder boundary.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "gale", "prepared"]
+    },
+    {
+      "id": "grakern-e0-adr-refinement",
+      "title": "ADR-006 Refinement and pattern identity",
+      "priority": 0,
+      "body": "Freeze exact recursive signatures, collision resolution, trace-local IDs, immutable query overlays, ancestor sharing, durable codecs, and DAG representation.",
+      "tags": ["grakern", "task", "phase-e0", "adr", "wl", "identity"]
+    },
+    {
+      "id": "grakern-e0-api-probe",
+      "title": "Compile architecture contract probes",
+      "priority": 0,
+      "body": "Compile positive examples and compile-fail invalid examples for all six ADRs. Demonstrate module acyclicity and that anonymous closures cannot acquire durable fingerprints.",
+      "tags": ["grakern", "task", "phase-e0", "api", "compiletime"]
+    },
+    {
+      "id": "grakern-gate-a",
+      "title": "Gate A: architecture contracts frozen",
+      "priority": 0,
+      "body": "Pass only when the build exists, all ADRs are versioned and consistent, contract probes behave as designed, core imports neither graph4s nor Gale, and no unresolved ownership contradiction remains.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e0"]
+    },
+    {
+      "id": "grakern-e1-skeleton",
+      "title": "E1 Minimal semantic and graph walking skeleton",
+      "priority": 0,
+      "body": "Implement only enough semantic core, hierarchy reference behavior, GraphSample, and packed corpus state to support one end-to-end WL walking skeleton.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e1", "core", "graph4s"]
+    },
+    {
+      "id": "grakern-e1-scalars-errors",
+      "title": "Implement validated scalars and typed preparation errors",
+      "priority": 0,
+      "body": "Add finite scalar wrappers, checked constructors, negative-zero policy, projection diagnostics, and typed expected failure channels.",
+      "tags": ["grakern", "task", "phase-e1", "core", "numerics"]
+    },
+    {
+      "id": "grakern-e1-kernel-types",
+      "title": "Implement PairScore, Similarity, Kernel, and StrongKernel skeleton",
+      "priority": 0,
+      "body": "Add safe and unsafe constructors, minimal closed expression nodes, named algebraic operations, strong return-type rules, and independent scalar evaluation.",
+      "tags": ["grakern", "task", "phase-e1", "core", "kernel"]
+    },
+    {
+      "id": "grakern-e1-projection-fingerprints",
+      "title": "Implement projections and three-level fingerprint metadata",
+      "priority": 0,
+      "body": "Implement ephemeral and named projections, PlanNodeId, fingerprintability blockers, semantic fingerprint composition, and artifact-fingerprint input records.",
+      "tags": ["grakern", "task", "phase-e1", "core", "fingerprint"]
+    },
+    {
+      "id": "grakern-e1-bags-hierarchy",
+      "title": "Implement FiniteBag, hierarchy validation, and Hungarian OA reference",
+      "priority": 0,
+      "body": "Implement exact bag multiplicity, positive-root hierarchy validation, LCA evaluation, external-zero padding, strong realization metadata, and a padded Hungarian reference evaluator.",
+      "tags": ["grakern", "task", "phase-e1", "core", "hierarchy", "oa"]
+    },
+    {
+      "id": "grakern-e1-graphsample",
+      "title": "Implement graph4s-backed GraphSample",
+      "priority": 0,
+      "body": "Add topology-first total field construction, graph-local vertex identity, sample keys, graph-scoped field validation, and molecular examples using AtomId rather than Atom identity.",
+      "tags": ["grakern", "task", "phase-e1", "graph4s", "api"]
+    },
+    {
+      "id": "grakern-e1-packed-corpus",
+      "title": "Implement private packed graph corpus",
+      "priority": 0,
+      "body": "Pack graph offsets, CSR adjacency, ownership, projected categorical columns, projected numeric columns, source diagnostics, and provenance mapping through graph4s public APIs.",
+      "tags": ["grakern", "task", "phase-e1", "engine", "packing", "graph4s"]
+    },
+    {
+      "id": "grakern-e1-walking-skeleton",
+      "title": "Connect minimal semantic core to one packed graph",
+      "priority": 0,
+      "body": "Demonstrate fallible preparation from GraphSample through PackedGraphCorpus into a minimal semantic node without building a general compiler framework.",
+      "tags": ["grakern", "task", "phase-e1", "vertical-slice"]
+    },
+    {
+      "id": "grakern-gate-b",
+      "title": "Gate B: minimal walking skeleton is executable",
+      "priority": 0,
+      "body": "Pass when GraphSample, packing, minimal kernel semantics, hierarchy reference behavior, and fingerprint metadata form one executable, typed, reproducible skeleton.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e1"]
+    },
+    {
+      "id": "grakern-e2-wl-trace",
+      "title": "E2 Exact immutable Weisfeiler-Lehman trace",
+      "priority": 0,
+      "body": "Implement exact recursive WL identity, collision-safe interning, trace-local colours, parent links, immutable query overlays, and invariance laws.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e2", "wl", "identity"]
+    },
+    {
+      "id": "grakern-e2-signature",
+      "title": "Define exact WL signature and provenance model",
+      "priority": 0,
+      "body": "Represent initial and recursive edge-aware multiset signatures, semantic parent links, levels, stable descriptors when available, and source provenance.",
+      "tags": ["grakern", "task", "phase-e2", "wl", "identity"]
+    },
+    {
+      "id": "grakern-e2-interner",
+      "title": "Implement collision-safe WL signature interner",
+      "priority": 0,
+      "body": "Use hashes only for candidate buckets, resolve equality structurally, intern DAG nodes, and keep integer IDs trace-local.",
+      "tags": ["grakern", "task", "phase-e2", "wl", "interner", "performance"]
+    },
+    {
+      "id": "grakern-e2-trace-build",
+      "title": "Build exact batch WL refinement traces",
+      "priority": 0,
+      "body": "Compute per-level vertex colours and signature parent links from packed corpora while preserving order-independent semantics and exact pattern identity.",
+      "tags": ["grakern", "task", "phase-e2", "wl", "refinement"]
+    },
+    {
+      "id": "grakern-e2-query-overlay",
+      "title": "Implement immutable query refinement overlay",
+      "priority": 0,
+      "body": "Fork or overlay the training interner immutably, reuse known signatures and ancestors, assign query-local new IDs, and support concurrent deterministic queries.",
+      "tags": ["grakern", "task", "phase-e2", "wl", "query", "immutability"]
+    },
+    {
+      "id": "grakern-e2-identity-laws",
+      "title": "Prove WL identity, collision, reindexing, and query laws",
+      "priority": 0,
+      "body": "Add adversarial-hash, vertex-permutation, trace ownership, parent-chain, query-overlay immutability, and concurrent-query regression suites.",
+      "tags": ["grakern", "task", "phase-e2", "laws", "wl"]
+    },
+    {
+      "id": "grakern-gate-c",
+      "title": "Gate C: exact WL trace semantics certified",
+      "priority": 0,
+      "body": "Pass when exact signatures survive adversarial collisions and vertex permutations, query overlays are immutable, parent links are correct, and colour IDs remain trace-scoped.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e2"]
+    },
+    {
+      "id": "grakern-e3-wl-features",
+      "title": "E3 Paired WL subtree and optimal-assignment features",
+      "priority": 0,
+      "body": "Make one exact WL trace support subtree features, hierarchy OA, threshold-expanded exact OA features, direct-sum composition, normalization, and provenance.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e3", "wl", "features", "oa"]
+    },
+    {
+      "id": "grakern-e3-subtree",
+      "title": "Implement exact WL subtree sparse features",
+      "priority": 0,
+      "body": "Emit counts keyed by round and exact signature with per-round nonnegative feature scaling and complete provenance.",
+      "tags": ["grakern", "task", "phase-e3", "wl", "features"]
+    },
+    {
+      "id": "grakern-e3-hierarchy-realization",
+      "title": "Derive WL hierarchy realization from refinement parent links",
+      "priority": 0,
+      "body": "Construct the finite observed WL hierarchy, nonnegative level increments, synthetic zero root where appropriate, leaf multiplicities, and strong-kernel realization metadata.",
+      "tags": ["grakern", "task", "phase-e3", "wl", "hierarchy"]
+    },
+    {
+      "id": "grakern-e3-oa-oracle",
+      "title": "Implement padded Hungarian WL-OA oracle",
+      "priority": 0,
+      "body": "Evaluate WL vertex bags through the strong base evaluator with repeated elements and unequal cardinalities for independent reference comparison.",
+      "tags": ["grakern", "task", "phase-e3", "wl", "oa", "reference"]
+    },
+    {
+      "id": "grakern-e3-oa-intersection",
+      "title": "Implement hierarchy-intersection WL-OA evaluator",
+      "priority": 0,
+      "body": "Compute incremental-height histogram intersection and prove agreement with the padded Hungarian oracle.",
+      "tags": ["grakern", "task", "phase-e3", "wl", "oa", "hierarchy"]
+    },
+    {
+      "id": "grakern-e3-oa-threshold",
+      "title": "Implement exact WL-OA threshold features",
+      "priority": 0,
+      "body": "Emit hierarchy-node and multiplicity-threshold features scaled by square-root incremental height; verify O(vertices times depth) active-coordinate growth and exact kernel reconstruction.",
+      "tags": ["grakern", "task", "phase-e3", "wl", "oa", "features"]
+    },
+    {
+      "id": "grakern-e3-directsum-normalize",
+      "title": "Compose subtree and OA by direct sum and normalize",
+      "priority": 0,
+      "body": "Concatenate exact feature blocks, apply square-root kernel weights, compute complete diagonals, apply the normalization policy, and retain component provenance.",
+      "tags": ["grakern", "task", "phase-e3", "features", "normalization"]
+    },
+    {
+      "id": "grakern-e3-provenance",
+      "title": "Implement WL contribution provenance",
+      "priority": 0,
+      "body": "Trace subtree and OA feature contributions to component, round, exact signature, hierarchy node, multiplicity threshold, and representative source vertices.",
+      "tags": ["grakern", "task", "phase-e3", "provenance", "wl"]
+    },
+    {
+      "id": "grakern-gate-d",
+      "title": "Gate D: paired exact WL feature proof",
+      "priority": 0,
+      "body": "Pass when one trace feeds both exact feature families, OA intersection and threshold features agree with Hungarian reference, direct-sum features reconstruct the combined normalized kernel, and provenance is complete.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e3"]
+    },
+    {
+      "id": "grakern-e4-engine",
+      "title": "E4 Closed compiler, Gale outputs, and query alignment",
+      "priority": 0,
+      "body": "Compile the paired WL expression to exact Gale features, Gram and operator views, immutable aligned query features, complete query norms, and a transparent plan report.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e4", "compiler", "gale"]
+    },
+    {
+      "id": "grakern-e4-compiler",
+      "title": "Implement closed exhaustive v0.1 compiler",
+      "priority": 0,
+      "body": "Pattern-match the small sealed IR, discover shared plan nodes, analyze capabilities, schedule WL trace sharing, and select exact feature-backed realizations without a public lowering SPI.",
+      "tags": ["grakern", "task", "phase-e4", "compiler"]
+    },
+    {
+      "id": "grakern-e4-plan-identities",
+      "title": "Implement plan sharing and semantic/artifact fingerprint reporting",
+      "priority": 0,
+      "body": "Assign PlanNodeIds, compose semantic fingerprints when durable, derive artifact fingerprints from corpus and engine inputs, and enumerate blockers.",
+      "tags": ["grakern", "task", "phase-e4", "compiler", "fingerprint"]
+    },
+    {
+      "id": "grakern-e4-gale-features",
+      "title": "Materialize exact Gale training feature matrices",
+      "priority": 0,
+      "body": "Build Gale CSR values with SampleIndex, FeatureDictionary, FeatureMetadata, stable block ordering, and no Ravel dependency.",
+      "tags": ["grakern", "task", "phase-e4", "gale", "features"]
+    },
+    {
+      "id": "grakern-e4-gram-operator",
+      "title": "Implement Gale Gram and feature-backed operator views",
+      "priority": 0,
+      "body": "Produce metadata-bearing Gram matrices and DoubleLinearOperator realizations, then verify operator application against materialized Gram multiplication.",
+      "tags": ["grakern", "task", "phase-e4", "gale", "operator", "gram"]
+    },
+    {
+      "id": "grakern-e4-query-alignment",
+      "title": "Implement aligned query features and complete query norms",
+      "priority": 0,
+      "body": "Build shared query CSR coordinates plus novelSquaredNorm, preserve OA ancestor matches, compute exact cross values, and keep prepared training state immutable across query calls.",
+      "tags": ["grakern", "task", "phase-e4", "query", "features", "cross"]
+    },
+    {
+      "id": "grakern-e4-plan-report",
+      "title": "Implement capabilities and explainable plan report",
+      "priority": 0,
+      "body": "Report the one-to-many WL plan graph, fingerprints, blockers, exactness, feature counts, density, query alignment, selected Gram/operator realization, normalization, memory, and estimated cost.",
+      "tags": ["grakern", "task", "phase-e4", "compiler", "explain"]
+    },
+    {
+      "id": "grakern-gate-e",
+      "title": "Gate E: executable paired WL architecture",
+      "priority": 0,
+      "body": "Pass when one WL trace yields exact subtree and OA features, a Gale Gram matrix, a feature-backed operator, correct query cross values and norms, immutable query overlays, and an intelligible plan report.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e4"]
+    },
+    {
+      "id": "grakern-e5-court-hardening",
+      "title": "E5 Acceptance court and generic core hardening",
+      "priority": 1,
+      "body": "Turn the paired slice into reusable lawful contracts only after the architecture proof passes; add the differential court, deterministic execution, generic extraction, histograms, cross-platform gates, and docs.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e5", "laws", "hardening"]
+    },
+    {
+      "id": "grakern-e5-differential-court",
+      "title": "Build the independent semantic differential court",
+      "priority": 1,
+      "body": "Compare scalar semantics, LCA hierarchy, Hungarian OA, histogram intersection, threshold dots, direct-sum features, Gram, operator, cross, and normalization through independent paths.",
+      "tags": ["grakern", "task", "phase-e5", "laws", "differential"]
+    },
+    {
+      "id": "grakern-e5-acceptance-suite",
+      "title": "Implement the full WL acceptance suite",
+      "priority": 1,
+      "body": "Implement reindexing, adversarial collision, sharing, OA oracle, query-only norm, ancestor sharing, provenance, concurrency, plan-sharing, feature reconstruction, and operator-agreement tests.",
+      "tags": ["grakern", "task", "phase-e5", "laws", "wl"]
+    },
+    {
+      "id": "grakern-e5-deterministic-parallel",
+      "title": "Implement deterministic parallel execution",
+      "priority": 1,
+      "body": "Use fixed partitioning and reduction trees, compare schedules, record numerical policy, and prove reproducibility without algebraic reassociation.",
+      "tags": ["grakern", "task", "phase-e5", "engine", "parallel", "determinism"]
+    },
+    {
+      "id": "grakern-e5-generic-extraction",
+      "title": "Extract stable Decomposition, Refinement, Hierarchy, and feature contracts",
+      "priority": 1,
+      "body": "Generalize only contracts demonstrated by the WL slice, preserve reference interpreters, and keep compiler implementation details closed.",
+      "tags": ["grakern", "task", "phase-e5", "core", "refactor"]
+    },
+    {
+      "id": "grakern-e5-histograms",
+      "title": "Add vertex and edge histogram recipes",
+      "priority": 1,
+      "body": "Exercise generic decomposition and exact sparse feature paths with simple standard recipes and complete provenance.",
+      "tags": ["grakern", "task", "phase-e5", "standard", "features"]
+    },
+    {
+      "id": "grakern-e5-crossplatform-docs",
+      "title": "Complete cross-platform semantic gates and executable architecture docs",
+      "priority": 1,
+      "body": "Run supported JVM/JS/Native semantic and law suites, document the six ADRs and walking slice, compile examples, and distinguish JVM-engine-only functionality.",
+      "tags": ["grakern", "task", "phase-e5", "docs", "crossplatform"]
+    },
+    {
+      "id": "grakern-gate-f",
+      "title": "Gate F: architecture validated and generic core hardened",
+      "priority": 0,
+      "body": "Pass when the full differential court succeeds, parallel execution is deterministic, extracted abstractions reduce duplication, histograms use the same machinery, and docs describe only implemented behavior.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e5"]
+    },
+    {
+      "id": "grakern-e6-shortest-path",
+      "title": "E6 Shortest-path second vertical slice",
+      "priority": 1,
+      "body": "Test decomposition, shared APSP, exact categorical features, nonnegative Dijkstra, continuous soft part kernels, endpoint canonicalization, and multiple lowerings for one denotation.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e6", "shortest-path"]
+    },
+    {
+      "id": "grakern-e6-path-semantics",
+      "title": "Define shortest-path decomposition and endpoint semantics",
+      "priority": 1,
+      "body": "Define undirected endpoint canonicalization, path-part identity, disconnected pairs, distance semantics, and an independent materialized reference decomposition.",
+      "tags": ["grakern", "task", "phase-e6", "shortest-path", "semantics"]
+    },
+    {
+      "id": "grakern-e6-bfs-apsp",
+      "title": "Implement shared unweighted BFS APSP",
+      "priority": 1,
+      "body": "Compute exact integer all-pairs distances once per graph and share the transform across path-kernel consumers.",
+      "tags": ["grakern", "task", "phase-e6", "shortest-path", "bfs", "engine"]
+    },
+    {
+      "id": "grakern-e6-categorical-features",
+      "title": "Implement exact categorical shortest-path features",
+      "priority": 1,
+      "body": "Emit exact endpoint and integer-distance feature keys, reconstruct the reference kernel, and retain path provenance.",
+      "tags": ["grakern", "task", "phase-e6", "shortest-path", "features"]
+    },
+    {
+      "id": "grakern-e6-dijkstra",
+      "title": "Implement nonnegative finite weighted Dijkstra",
+      "priority": 1,
+      "body": "Validate edge lengths during packing, reject negative or nonfinite values, compute shared weighted APSP, and compare with the path denotation.",
+      "tags": ["grakern", "task", "phase-e6", "shortest-path", "dijkstra", "numerics"]
+    },
+    {
+      "id": "grakern-e6-soft-kernel",
+      "title": "Implement soft continuous shortest-path part kernel",
+      "priority": 1,
+      "body": "Combine categorical endpoint kernels with a continuous distance kernel through decomposition, exact pairwise evaluation, normalization, and typed numeric validation.",
+      "tags": ["grakern", "task", "phase-e6", "shortest-path", "kernel", "continuous"]
+    },
+    {
+      "id": "grakern-e6-planner",
+      "title": "Plan shared APSP and alternative shortest-path lowerings",
+      "priority": 1,
+      "body": "Share APSP nodes, choose BFS or Dijkstra from semantics, expose exact-feature versus pairwise capabilities, and explain the selection.",
+      "tags": ["grakern", "task", "phase-e6", "compiler", "shortest-path"]
+    },
+    {
+      "id": "grakern-gate-g",
+      "title": "Gate G: shortest-path slice validates the calculus",
+      "priority": 0,
+      "body": "Pass when decomposition is reusable, APSP is shared, exact categorical and soft pairwise paths agree with references, invalid weights fail early, and planner choice does not change denotation.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e6"]
+    },
+    {
+      "id": "grakern-e7-alpha",
+      "title": "E7 Alpha hardening and release evidence",
+      "priority": 1,
+      "body": "Complete prepared centering, user-facing documentation, end-to-end performance court, release acceptance audit, and a coherent alpha containing only proven kernels and views.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e7", "alpha", "release"]
+    },
+    {
+      "id": "grakern-e7-centering",
+      "title": "Implement reference-bound prepared centering",
+      "priority": 1,
+      "body": "Center Gram, cross, features, and operator views against the training corpus without presenting centering as a context-free kernel.",
+      "tags": ["grakern", "task", "phase-e7", "prepared", "centering"]
+    },
+    {
+      "id": "grakern-e7-docs-examples",
+      "title": "Build executable alpha documentation and examples",
+      "priority": 1,
+      "body": "Document GraphSample, lawful kernel construction, WL composition, shortest path, prepared views, query alignment, fingerprint blockers, provenance, and plan reports with compiled examples.",
+      "tags": ["grakern", "task", "phase-e7", "docs", "examples"]
+    },
+    {
+      "id": "grakern-e7-performance-court",
+      "title": "Run end-to-end semantic and performance court",
+      "priority": 1,
+      "body": "Measure packing through Gram, cross, operator, and peak memory across WL feature/intersection strategies and query novelty levels; publish losses as well as wins.",
+      "tags": ["grakern", "task", "phase-e7", "benchmark", "performance"]
+    },
+    {
+      "id": "grakern-e7-release-audit",
+      "title": "Produce alpha acceptance and release audit",
+      "priority": 1,
+      "body": "Audit module ownership, public API, laws, docs, dependency pins, binary/publication prerequisites, unsupported scope, and all stop conditions.",
+      "tags": ["grakern", "task", "phase-e7", "release", "audit"]
+    },
+    {
+      "id": "grakern-gate-alpha",
+      "title": "Gate Alpha: coherent lawful graph-kernel calculus",
+      "priority": 0,
+      "body": "Pass when the alpha scope is implemented and verified, dependency and publication state are reported honestly, performance evidence is end-to-end, and no deferred catalogue promise leaks into the release claim.",
+      "tags": ["grakern", "gate", "acceptance", "phase-e7", "alpha"]
+    },
+    {
+      "id": "grakern-e8-post-alpha",
+      "title": "E8 Post-alpha computational breadth",
+      "priority": 2,
+      "body": "Add breadth only after the alpha proves the calculus: graphlets, explicit approximations, tiled output, implicit walks, directed support, adapters, and optional GPU work each retain a denotation and proof gate.",
+      "tags": ["grakern", "epic", "roadmap", "phase-e8", "post-alpha"]
+    },
+    {
+      "id": "grakern-e8-graphlets",
+      "title": "Add exact and sampled graphlet recipes",
+      "priority": 2,
+      "body": "Implement canonical induced-subgraph patterns, exact enumeration, explicit sampling metadata, provenance, and reference agreement.",
+      "tags": ["grakern", "task", "phase-e8", "graphlets"]
+    },
+    {
+      "id": "grakern-e8-approximations",
+      "title": "Add RFF, Nyström, and feature-hashing realizations",
+      "priority": 2,
+      "body": "Push valid approximations through decompositions, record targets and seeds, preserve query norms, and expose approximation audit metadata.",
+      "tags": ["grakern", "task", "phase-e8", "approximation", "features"]
+    },
+    {
+      "id": "grakern-e8-tiled-output",
+      "title": "Add tiled and memory-mapped Gram output",
+      "priority": 2,
+      "body": "Add blocked matrix sinks, memory budgets, tiles, memory-mapped JVM output, and cancellation-safe ownership without making full dense Gram materialization mandatory.",
+      "tags": ["grakern", "task", "phase-e8", "engine", "storage"]
+    },
+    {
+      "id": "grakern-e8-random-walk",
+      "title": "Add implicit product-graph random-walk kernels",
+      "priority": 2,
+      "body": "Define truncated and summable walk semantics, product-graph operators, solver strategies, convergence checks, residual diagnostics, and independent small-graph references.",
+      "tags": ["grakern", "task", "phase-e8", "random-walk", "solver"]
+    },
+    {
+      "id": "grakern-e8-directed",
+      "title": "Add directed attributed graph support",
+      "priority": 2,
+      "body": "Extend graph4s field integration and packing only after a precise directed node/edge data contract and direction-sensitive kernel semantics are approved.",
+      "tags": ["grakern", "task", "phase-e8", "directed", "graph4s"]
+    },
+    {
+      "id": "grakern-e8-adapters",
+      "title": "Add Alder, I/O, and effect adapters",
+      "priority": 2,
+      "body": "Construct Alder-owned views, add dataset interchange modules, and provide optional Cats Effect and FS2 execution without infecting the mathematical API.",
+      "tags": ["grakern", "task", "phase-e8", "adapter", "alder", "io", "effect"]
+    },
+    {
+      "id": "grakern-e8-gpu",
+      "title": "Evaluate optional GPU lowerings",
+      "priority": 3,
+      "body": "Add GPU execution only for an existing semantic node with reference agreement, transfer-inclusive benchmarks, capability reporting, and no GPU type leakage into core.",
+      "tags": ["grakern", "task", "phase-e8", "gpu", "performance"]
+    }
+  ],
+  "deps": [
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-graph", "kind": "blocks"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-strong", "kind": "blocks"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-identity", "kind": "blocks"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-numerical", "kind": "blocks"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-prepared", "kind": "blocks"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-adr-refinement", "kind": "blocks"},
+    {"child": "grakern-gate-a", "parent": "grakern-plan-prd", "kind": "blocks"},
+    {"child": "grakern-gate-a", "parent": "grakern-e0-bootstrap", "kind": "blocks"},
+    {"child": "grakern-gate-a", "parent": "grakern-e0-api-probe", "kind": "blocks"},
+
+    {"child": "grakern-e1-skeleton", "parent": "grakern-gate-a", "kind": "blocks"},
+    {"child": "grakern-e1-scalars-errors", "parent": "grakern-gate-a", "kind": "blocks"},
+    {"child": "grakern-e1-graphsample", "parent": "grakern-gate-a", "kind": "blocks"},
+    {"child": "grakern-e1-kernel-types", "parent": "grakern-e1-scalars-errors", "kind": "blocks"},
+    {"child": "grakern-e1-projection-fingerprints", "parent": "grakern-e1-scalars-errors", "kind": "blocks"},
+    {"child": "grakern-e1-bags-hierarchy", "parent": "grakern-e1-kernel-types", "kind": "blocks"},
+    {"child": "grakern-e1-packed-corpus", "parent": "grakern-e1-graphsample", "kind": "blocks"},
+    {"child": "grakern-e1-packed-corpus", "parent": "grakern-e1-scalars-errors", "kind": "blocks"},
+    {"child": "grakern-e1-walking-skeleton", "parent": "grakern-e1-kernel-types", "kind": "blocks"},
+    {"child": "grakern-e1-walking-skeleton", "parent": "grakern-e1-projection-fingerprints", "kind": "blocks"},
+    {"child": "grakern-e1-walking-skeleton", "parent": "grakern-e1-bags-hierarchy", "kind": "blocks"},
+    {"child": "grakern-e1-walking-skeleton", "parent": "grakern-e1-packed-corpus", "kind": "blocks"},
+    {"child": "grakern-gate-b", "parent": "grakern-e1-walking-skeleton", "kind": "blocks"},
+
+    {"child": "grakern-e2-wl-trace", "parent": "grakern-gate-b", "kind": "blocks"},
+    {"child": "grakern-e2-signature", "parent": "grakern-gate-b", "kind": "blocks"},
+    {"child": "grakern-e2-interner", "parent": "grakern-e2-signature", "kind": "blocks"},
+    {"child": "grakern-e2-trace-build", "parent": "grakern-e2-interner", "kind": "blocks"},
+    {"child": "grakern-e2-trace-build", "parent": "grakern-e1-packed-corpus", "kind": "blocks"},
+    {"child": "grakern-e2-query-overlay", "parent": "grakern-e2-trace-build", "kind": "blocks"},
+    {"child": "grakern-e2-identity-laws", "parent": "grakern-e2-trace-build", "kind": "blocks"},
+    {"child": "grakern-e2-identity-laws", "parent": "grakern-e2-query-overlay", "kind": "blocks"},
+    {"child": "grakern-gate-c", "parent": "grakern-e2-identity-laws", "kind": "blocks"},
+
+    {"child": "grakern-e3-wl-features", "parent": "grakern-gate-c", "kind": "blocks"},
+    {"child": "grakern-e3-subtree", "parent": "grakern-gate-c", "kind": "blocks"},
+    {"child": "grakern-e3-hierarchy-realization", "parent": "grakern-gate-c", "kind": "blocks"},
+    {"child": "grakern-e3-hierarchy-realization", "parent": "grakern-e1-bags-hierarchy", "kind": "blocks"},
+    {"child": "grakern-e3-oa-oracle", "parent": "grakern-e3-hierarchy-realization", "kind": "blocks"},
+    {"child": "grakern-e3-oa-intersection", "parent": "grakern-e3-hierarchy-realization", "kind": "blocks"},
+    {"child": "grakern-e3-oa-intersection", "parent": "grakern-e3-oa-oracle", "kind": "blocks"},
+    {"child": "grakern-e3-oa-threshold", "parent": "grakern-e3-oa-intersection", "kind": "blocks"},
+    {"child": "grakern-e3-directsum-normalize", "parent": "grakern-e3-subtree", "kind": "blocks"},
+    {"child": "grakern-e3-directsum-normalize", "parent": "grakern-e3-oa-threshold", "kind": "blocks"},
+    {"child": "grakern-e3-provenance", "parent": "grakern-e3-directsum-normalize", "kind": "blocks"},
+    {"child": "grakern-gate-d", "parent": "grakern-e3-directsum-normalize", "kind": "blocks"},
+    {"child": "grakern-gate-d", "parent": "grakern-e3-provenance", "kind": "blocks"},
+    {"child": "grakern-gate-d", "parent": "grakern-e3-oa-oracle", "kind": "blocks"},
+
+    {"child": "grakern-e4-engine", "parent": "grakern-gate-d", "kind": "blocks"},
+    {"child": "grakern-e4-compiler", "parent": "grakern-gate-d", "kind": "blocks"},
+    {"child": "grakern-e4-plan-identities", "parent": "grakern-gate-d", "kind": "blocks"},
+    {"child": "grakern-e4-gale-features", "parent": "grakern-e4-compiler", "kind": "blocks"},
+    {"child": "grakern-e4-gale-features", "parent": "grakern-e3-directsum-normalize", "kind": "blocks"},
+    {"child": "grakern-e4-gram-operator", "parent": "grakern-e4-gale-features", "kind": "blocks"},
+    {"child": "grakern-e4-query-alignment", "parent": "grakern-e4-gale-features", "kind": "blocks"},
+    {"child": "grakern-e4-query-alignment", "parent": "grakern-e4-gram-operator", "kind": "blocks"},
+    {"child": "grakern-e4-query-alignment", "parent": "grakern-e2-query-overlay", "kind": "blocks"},
+    {"child": "grakern-e4-plan-report", "parent": "grakern-e4-compiler", "kind": "blocks"},
+    {"child": "grakern-e4-plan-report", "parent": "grakern-e4-plan-identities", "kind": "blocks"},
+    {"child": "grakern-e4-plan-report", "parent": "grakern-e4-query-alignment", "kind": "blocks"},
+    {"child": "grakern-gate-e", "parent": "grakern-e4-gram-operator", "kind": "blocks"},
+    {"child": "grakern-gate-e", "parent": "grakern-e4-query-alignment", "kind": "blocks"},
+    {"child": "grakern-gate-e", "parent": "grakern-e4-plan-report", "kind": "blocks"},
+
+    {"child": "grakern-e5-court-hardening", "parent": "grakern-gate-e", "kind": "blocks"},
+    {"child": "grakern-e5-differential-court", "parent": "grakern-gate-e", "kind": "blocks"},
+    {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-gate-e", "kind": "blocks"},
+    {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-differential-court", "kind": "blocks"},
+    {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
+    {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-deterministic-parallel", "kind": "blocks"},
+    {"child": "grakern-e5-histograms", "parent": "grakern-e5-generic-extraction", "kind": "blocks"},
+    {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-generic-extraction", "kind": "blocks"},
+    {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-histograms", "kind": "blocks"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-acceptance-suite", "kind": "blocks"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-deterministic-parallel", "kind": "blocks"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-crossplatform-docs", "kind": "blocks"},
+
+    {"child": "grakern-e6-shortest-path", "parent": "grakern-gate-f", "kind": "blocks"},
+    {"child": "grakern-e6-path-semantics", "parent": "grakern-gate-f", "kind": "blocks"},
+    {"child": "grakern-e6-bfs-apsp", "parent": "grakern-e6-path-semantics", "kind": "blocks"},
+    {"child": "grakern-e6-categorical-features", "parent": "grakern-e6-bfs-apsp", "kind": "blocks"},
+    {"child": "grakern-e6-dijkstra", "parent": "grakern-e6-bfs-apsp", "kind": "blocks"},
+    {"child": "grakern-e6-soft-kernel", "parent": "grakern-e6-categorical-features", "kind": "blocks"},
+    {"child": "grakern-e6-soft-kernel", "parent": "grakern-e6-dijkstra", "kind": "blocks"},
+    {"child": "grakern-e6-planner", "parent": "grakern-e6-categorical-features", "kind": "blocks"},
+    {"child": "grakern-e6-planner", "parent": "grakern-e6-soft-kernel", "kind": "blocks"},
+    {"child": "grakern-gate-g", "parent": "grakern-e6-planner", "kind": "blocks"},
+    {"child": "grakern-gate-g", "parent": "grakern-e6-soft-kernel", "kind": "blocks"},
+
+    {"child": "grakern-e7-alpha", "parent": "grakern-gate-g", "kind": "blocks"},
+    {"child": "grakern-e7-centering", "parent": "grakern-gate-g", "kind": "blocks"},
+    {"child": "grakern-e7-performance-court", "parent": "grakern-gate-g", "kind": "blocks"},
+    {"child": "grakern-e7-docs-examples", "parent": "grakern-e7-centering", "kind": "blocks"},
+    {"child": "grakern-e7-release-audit", "parent": "grakern-e7-centering", "kind": "blocks"},
+    {"child": "grakern-e7-release-audit", "parent": "grakern-e7-docs-examples", "kind": "blocks"},
+    {"child": "grakern-e7-release-audit", "parent": "grakern-e7-performance-court", "kind": "blocks"},
+    {"child": "grakern-gate-alpha", "parent": "grakern-e7-release-audit", "kind": "blocks"},
+
+    {"child": "grakern-e8-post-alpha", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-graphlets", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-approximations", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-tiled-output", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-random-walk", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-directed", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-adapters", "parent": "grakern-gate-alpha", "kind": "blocks"},
+    {"child": "grakern-e8-gpu", "parent": "grakern-e8-random-walk", "kind": "blocks"}
+  ],
+  "relations": [
+    {"child": "grakern-plan-prd", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-bootstrap", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-graph", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-strong", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-identity", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-numerical", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-prepared", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-adr-refinement", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-e0-api-probe", "parent": "grakern-e0-architecture", "kind": "parent"},
+    {"child": "grakern-gate-a", "parent": "grakern-e0-architecture", "kind": "parent"},
+
+    {"child": "grakern-e1-scalars-errors", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-kernel-types", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-projection-fingerprints", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-bags-hierarchy", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-graphsample", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-packed-corpus", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-e1-walking-skeleton", "parent": "grakern-e1-skeleton", "kind": "parent"},
+    {"child": "grakern-gate-b", "parent": "grakern-e1-skeleton", "kind": "parent"},
+
+    {"child": "grakern-e2-signature", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+    {"child": "grakern-e2-interner", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+    {"child": "grakern-e2-trace-build", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+    {"child": "grakern-e2-query-overlay", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+    {"child": "grakern-e2-identity-laws", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+    {"child": "grakern-gate-c", "parent": "grakern-e2-wl-trace", "kind": "parent"},
+
+    {"child": "grakern-e3-subtree", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-hierarchy-realization", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-oa-oracle", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-oa-intersection", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-oa-threshold", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-directsum-normalize", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-e3-provenance", "parent": "grakern-e3-wl-features", "kind": "parent"},
+    {"child": "grakern-gate-d", "parent": "grakern-e3-wl-features", "kind": "parent"},
+
+    {"child": "grakern-e4-compiler", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-e4-plan-identities", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-e4-gale-features", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-e4-gram-operator", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-e4-query-alignment", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-e4-plan-report", "parent": "grakern-e4-engine", "kind": "parent"},
+    {"child": "grakern-gate-e", "parent": "grakern-e4-engine", "kind": "parent"},
+
+    {"child": "grakern-e5-differential-court", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-acceptance-suite", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-deterministic-parallel", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-generic-extraction", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-histograms", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-e5-crossplatform-docs", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+    {"child": "grakern-gate-f", "parent": "grakern-e5-court-hardening", "kind": "parent"},
+
+    {"child": "grakern-e6-path-semantics", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-e6-bfs-apsp", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-e6-categorical-features", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-e6-dijkstra", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-e6-soft-kernel", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-e6-planner", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+    {"child": "grakern-gate-g", "parent": "grakern-e6-shortest-path", "kind": "parent"},
+
+    {"child": "grakern-e7-centering", "parent": "grakern-e7-alpha", "kind": "parent"},
+    {"child": "grakern-e7-docs-examples", "parent": "grakern-e7-alpha", "kind": "parent"},
+    {"child": "grakern-e7-performance-court", "parent": "grakern-e7-alpha", "kind": "parent"},
+    {"child": "grakern-e7-release-audit", "parent": "grakern-e7-alpha", "kind": "parent"},
+    {"child": "grakern-gate-alpha", "parent": "grakern-e7-alpha", "kind": "parent"},
+
+    {"child": "grakern-e8-graphlets", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-approximations", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-tiled-output", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-random-walk", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-directed", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-adapters", "parent": "grakern-e8-post-alpha", "kind": "parent"},
+    {"child": "grakern-e8-gpu", "parent": "grakern-e8-post-alpha", "kind": "parent"}
+  ]
+}

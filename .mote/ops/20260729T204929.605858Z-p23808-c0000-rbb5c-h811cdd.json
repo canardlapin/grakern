@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e0-bootstrap","kind":"reserve_open","mode":"exclusive","op":"20260729T204929.605858Z-p23808-c0000-rbb5c-h811cdd","paths":["build.sbt","project/build.properties","project/plugins.sbt",".github/workflows/ci.yml",".gitignore","LICENSE"],"reservation_id":"rv-01KYQT7DG5BDZMVE5J6GED574R","ts":"2026-07-29T20:49:29.605858Z","ttl_s":3600,"v":1}
