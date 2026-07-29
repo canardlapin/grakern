@@ -28,6 +28,8 @@ ThisBuild / githubWorkflowJavaVersions := Seq(
 )
 
 lazy val strictSettings = Seq(
+  dependencyOverrides +=
+    "org.scala-lang" % "scala3-library_3" % Scala3,
   scalacOptions ++= Seq(
     "-Wunused:all",
     "-Yexplicit-nulls",
@@ -69,12 +71,15 @@ lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .settings(strictSettings)
   .settings(
     name := "grakern-core",
-    libraryDependencies += "org.typelevel" %%% "cats-kernel" % CatsV
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-core"   % CatsV,
+      "org.typelevel" %%% "cats-kernel" % CatsV
+    )
   )
 
 lazy val graph4sAdapter = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
-  .in(file("graph4s"))
+  .in(file("graph4s-adapter"))
   .dependsOn(core)
   .jvmConfigure(_.dependsOn(graph4sCoreJVM, graph4sIndexedJVM, graph4sDataJVM))
   .jsConfigure(_.dependsOn(graph4sCoreJS, graph4sIndexedJS, graph4sDataJS))

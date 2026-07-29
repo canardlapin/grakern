@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-gate-b","kind":"note","note_kind":"note","op":"20260729T213910.070223Z-p58583-c0000-rfdb0-h95feee","text":"Minimal typed walking skeleton is executable and reproducible; only the local Scala Native clang 15 deprecation warning remains environmental.","ts":"2026-07-29T21:39:10.070223Z","v":1}

@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e1-bags-hierarchy","kind":"note","note_kind":"note","op":"20260729T213433.369612Z-p54497-c0000-r8493-h483265","text":"Twenty-six core tests pass on JVM, Scala.js, and Scala Native, including hierarchy/Hungarian differential cases with empty, repeated, and unequal bags.","ts":"2026-07-29T21:34:33.369612Z","v":1}

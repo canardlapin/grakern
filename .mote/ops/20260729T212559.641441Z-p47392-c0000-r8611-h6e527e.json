@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e1-packed-corpus","kind":"note","note_kind":"note","op":"20260729T212559.641441Z-p47392-c0000-r8611-h6e527e","text":"Five packed-corpus tests pass on JVM; external graph4s VertexSet and Eq semantics are used during packing.","ts":"2026-07-29T21:25:59.641441Z","v":1}

@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e1-kernel-types","kind":"note","note_kind":"note","op":"20260729T212559.373319Z-p47388-c0000-rc90e-h411577","text":"Seven kernel tests pass on JVM, Scala.js, and Scala Native; strongness return rules are compile-time tested.","ts":"2026-07-29T21:25:59.373319Z","v":1}

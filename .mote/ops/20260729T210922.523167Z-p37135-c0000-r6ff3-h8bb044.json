@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e1-scalars-errors","kind":"note","note_kind":"note","op":"20260729T210922.523167Z-p37135-c0000-r6ff3-h8bb044","text":"Six scalar/error tests pass on JVM, Scala.js, and Native; portable dependency warning resolved.","ts":"2026-07-29T21:09:22.523167Z","v":1}

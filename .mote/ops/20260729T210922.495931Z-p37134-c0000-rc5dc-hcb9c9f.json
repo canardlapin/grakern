@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e1-scalars-errors","kind":"note","note_kind":"decision","op":"20260729T210922.495931Z-p37134-c0000-rc5dc-hcb9c9f","text":"Aligned the transitive JVM scala3-library_3 used by the compiler to Scala 3.7.4; clean Scala.js compilation now has no duplicate-standard-library warning.","ts":"2026-07-29T21:09:22.495931Z","v":1}
