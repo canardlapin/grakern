@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e2-interner","kind":"note","note_kind":"note","op":"20260729T214802.840178Z-p63791-c0000-r1e0f-h871773","text":"Ten standard tests pass on JVM, Scala.js, and Scala Native, including a constant-hash adversary and foreign-colour rejection.","ts":"2026-07-29T21:48:02.840178Z","v":1}

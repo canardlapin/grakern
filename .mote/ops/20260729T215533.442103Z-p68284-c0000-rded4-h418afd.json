@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e2-query-overlay","kind":"note","note_kind":"note","op":"20260729T215533.442103Z-p68284-c0000-rded4-h418afd","text":"Standard 17 tests pass on JVM/JS/Native and engine 17 tests pass on JVM, including known reuse, novel ancestor sharing, and overlay owner separation.","ts":"2026-07-29T21:55:33.442103Z","v":1}
