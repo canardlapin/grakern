@@ -37,7 +37,7 @@ final class WorkerEngineSuite extends FunSuite:
     )
   }
 
-  test("sample target preserves the 36 second evidence margin") {
+  test("sample target preserves the 60 second evidence margin") {
     assertEquals(
       WorkerEngine.targetSampleNanosFor(
         SamplingContract(
@@ -48,7 +48,7 @@ final class WorkerEngineSuite extends FunSuite:
           samples = 30
         )
       ),
-      120_000_000L
+      200_000_000L
     )
     assertEquals(
       WorkerEngine.targetSampleNanosFor(
@@ -60,7 +60,7 @@ final class WorkerEngineSuite extends FunSuite:
           samples = 5
         )
       ),
-      1_440_000_000L
+      2_400_000_000L
     )
   }
 

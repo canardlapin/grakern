@@ -136,8 +136,8 @@ final private[benchmark] case class OperationContext(
 )
 
 private[benchmark] object WorkerEngine:
-  private val TargetCourtTimedNanos = 36_000_000_000L
-  private val MinimumTargetSampleNanos = 120_000_000L
+  private val TargetCourtTimedNanos = 60_000_000_000L
+  private val MinimumTargetSampleNanos = 200_000_000L
   private val MaximumBatchSize = 100_000
   private val ThreadEnvironment =
     Set(
