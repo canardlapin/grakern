@@ -1,0 +1,752 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grakern.dev/schemas/performance-receipt-v1.json",
+  "title": "Grakern performance court receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "receipt_id",
+    "status",
+    "created_at",
+    "row",
+    "implementation",
+    "source",
+    "runtime",
+    "host",
+    "admission",
+    "semantic_output",
+    "sampling",
+    "metrics",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "grakern.performance-receipt.v1"
+    },
+    "receipt_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "enum": [
+        "admitted",
+        "diagnostic_only",
+        "blocked_host",
+        "blocked_source",
+        "semantic_mismatch",
+        "comparator_defect",
+        "unsupported"
+      ]
+    },
+    "row": {
+      "$ref": "#/$defs/row"
+    },
+    "implementation": {
+      "$ref": "#/$defs/implementation"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "host": {
+      "$ref": "#/$defs/host"
+    },
+    "admission": {
+      "$ref": "#/$defs/admission"
+    },
+    "semantic_output": {
+      "$ref": "#/$defs/semanticOutput"
+    },
+    "sampling": {
+      "$ref": "#/$defs/sampling"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "classification": {
+      "$ref": "#/$defs/classification"
+    },
+    "artifacts": {
+      "$ref": "#/$defs/artifacts"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "admitted"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "admission": {
+            "properties": {
+              "source_admitted": {
+                "const": true
+              },
+              "host_admitted": {
+                "const": true
+              },
+              "semantic_admitted": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "allOf": [
+          {
+            "properties": {
+              "status": {
+                "const": "admitted"
+              }
+            }
+          },
+          {
+            "properties": {
+              "implementation": {
+                "properties": {
+                  "comparator_role": {
+                    "const": "candidate"
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "sampling": {
+                "properties": {
+                  "mode": {
+                    "const": "warm"
+                  }
+                }
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "required": ["classification"]
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available"],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "number"
+        },
+        "reason_unavailable": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "available": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": ["value"]
+          },
+          "else": {
+            "required": ["reason_unavailable"]
+          }
+        }
+      ]
+    },
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tier1_id",
+        "boundary",
+        "kernel_configuration",
+        "corpus_id",
+        "corpus_sha256",
+        "output_kind",
+        "application_threads",
+        "blas_threads"
+      ],
+      "properties": {
+        "tier1_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary": {
+          "enum": [
+            "public_end_to_end",
+            "prepared_topology"
+          ]
+        },
+        "kernel_configuration": {
+          "type": "object"
+        },
+        "corpus_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "corpus_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "output_kind": {
+          "enum": ["gram", "cross"]
+        },
+        "application_threads": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "blas_threads": {
+          "$ref": "#/$defs/positiveInteger"
+        }
+      }
+    },
+    "implementation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "entrypoint", "comparator_role"],
+      "properties": {
+        "id": {
+          "enum": ["grakern", "grakel", "graphkernels_jl"]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "comparator_role": {
+          "enum": ["candidate", "external_comparator"]
+        },
+        "semantic_translation": {
+          "type": "string"
+        }
+      }
+    },
+    "sourceComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revision",
+        "tree_sha256",
+        "clean",
+        "lock_sha256"
+      ],
+      "properties": {
+        "revision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tree_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "clean": {
+          "type": "boolean"
+        },
+        "lock_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "before",
+        "after",
+        "runner_sha256",
+        "workload_manifest_sha256",
+        "unchanged"
+      ],
+      "properties": {
+        "before": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sourceComponent"
+          },
+          "minProperties": 1
+        },
+        "after": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sourceComponent"
+          },
+          "minProperties": 1
+        },
+        "runner_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "workload_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "unchanged": {
+          "type": "boolean"
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "language_version",
+        "operating_system",
+        "architecture",
+        "environment"
+      ],
+      "properties": {
+        "language": {
+          "enum": ["scala-jvm", "python", "julia"]
+        },
+        "language_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vm_version": {
+          "type": "string"
+        },
+        "compiler_version": {
+          "type": "string"
+        },
+        "operating_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "architecture": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "calibration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "median_ns",
+        "coefficient_of_variation"
+      ],
+      "properties": {
+        "median_ns": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "coefficient_of_variation": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "host_id",
+        "cpu",
+        "physical_cores",
+        "memory_bytes",
+        "ac_power",
+        "performance_mode",
+        "non_court_cpu_percent",
+        "free_memory_bytes",
+        "swap_growth_bytes",
+        "memory_pressure",
+        "thermal_or_power_throttling",
+        "other_court_process",
+        "calibration_before",
+        "calibration_after"
+      ],
+      "properties": {
+        "host_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "cpu": {
+          "type": "string",
+          "minLength": 1
+        },
+        "physical_cores": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "memory_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "ac_power": {
+          "type": "boolean"
+        },
+        "performance_mode": {
+          "type": "boolean"
+        },
+        "non_court_cpu_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "free_memory_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "swap_growth_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "memory_pressure": {
+          "type": "boolean"
+        },
+        "thermal_or_power_throttling": {
+          "type": "boolean"
+        },
+        "other_court_process": {
+          "type": "boolean"
+        },
+        "calibration_before": {
+          "$ref": "#/$defs/calibration"
+        },
+        "calibration_after": {
+          "$ref": "#/$defs/calibration"
+        }
+      }
+    },
+    "admissionCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed", "evidence"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "admission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_admitted",
+        "host_admitted",
+        "semantic_admitted",
+        "checks"
+      ],
+      "properties": {
+        "source_admitted": {
+          "type": "boolean"
+        },
+        "host_admitted": {
+          "type": "boolean"
+        },
+        "semantic_admitted": {
+          "type": "boolean"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/admissionCheck"
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "semanticOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shape",
+        "sample_order_sha256",
+        "comparison",
+        "observed_sha256",
+        "expected_sha256",
+        "finite"
+      ],
+      "properties": {
+        "shape": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "sample_order_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "comparison": {
+          "enum": ["exact_ieee754", "elementwise_tolerance"]
+        },
+        "absolute_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "relative_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observed_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "expected_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "maximum_absolute_error": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_relative_error": {
+          "type": "number",
+          "minimum": 0
+        },
+        "finite": {
+          "type": "boolean"
+        }
+      }
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "policy",
+        "forks",
+        "warmups_per_fork",
+        "samples_per_fork",
+        "batch_size",
+        "timed_work_ns",
+        "execution_order_seed",
+        "durations_ns"
+      ],
+      "properties": {
+        "mode": {
+          "enum": ["cold", "warm"]
+        },
+        "policy": {
+          "enum": ["standard", "expensive_row"]
+        },
+        "forks": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "warmups_per_fork": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "samples_per_fork": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "batch_size": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "timed_work_ns": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "execution_order_seed": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "durations_ns": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/positiveInteger"
+            },
+            "minItems": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_clock_median_ns",
+        "cpu_time_ns",
+        "runtime_baseline_rss_bytes",
+        "peak_rss_bytes",
+        "peak_rss_delta_bytes",
+        "allocated_bytes",
+        "gc_count"
+      ],
+      "properties": {
+        "wall_clock_median_ns": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "cpu_time_ns": {
+          "$ref": "#/$defs/availability"
+        },
+        "runtime_baseline_rss_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "peak_rss_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "peak_rss_delta_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "allocated_bytes": {
+          "$ref": "#/$defs/availability"
+        },
+        "gc_count": {
+          "$ref": "#/$defs/availability"
+        },
+        "phases": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          }
+        }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome",
+        "memory_outcome"
+      ],
+      "properties": {
+        "outcome": {
+          "enum": ["win", "tie", "loss", "uncontested"]
+        },
+        "comparator_receipt_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "median_ratio": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "confidence_level": {
+          "const": 0.99
+        },
+        "confidence_interval": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "bootstrap_seed": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "bootstrap_resamples": {
+          "type": "integer",
+          "minimum": 20000
+        },
+        "memory_outcome": {
+          "enum": ["pass", "material_loss", "unavailable"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["win", "tie", "loss"]
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "comparator_receipt_id",
+              "median_ratio",
+              "confidence_level",
+              "confidence_interval",
+              "bootstrap_seed",
+              "bootstrap_resamples"
+            ]
+          }
+        }
+      ]
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "media_type"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_samples", "proof_log", "stdout", "stderr"],
+      "properties": {
+        "raw_samples": {
+          "$ref": "#/$defs/artifact"
+        },
+        "proof_log": {
+          "$ref": "#/$defs/artifact"
+        },
+        "stdout": {
+          "$ref": "#/$defs/artifact"
+        },
+        "stderr": {
+          "$ref": "#/$defs/artifact"
+        },
+        "profile": {
+          "$ref": "#/$defs/artifact"
+        }
+      }
+    }
+  }
+}

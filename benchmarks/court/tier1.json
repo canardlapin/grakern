@@ -1,0 +1,216 @@
+{
+  "schema_version": "grakern.performance-tier1.v1",
+  "adr": "docs/adr/008-performance-court.md",
+  "championship_metric": "warm_wall_clock_ns",
+  "thread_policy": {
+    "application_threads": 1,
+    "blas_threads": 1
+  },
+  "boundaries": [
+    "public_end_to_end",
+    "prepared_topology"
+  ],
+  "comparators": {
+    "grakel": {
+      "distribution": "GraKeL",
+      "version": "0.1.10",
+      "python": "3.11",
+      "numpy": "1.26.4"
+    },
+    "graphkernels_jl": {
+      "package": "GraphKernels.jl",
+      "version": "0.2.0",
+      "revision": "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
+    }
+  },
+  "corpora": {
+    "mutag-188": {
+      "kind": "tu_dataset",
+      "source": "https://www.chrsmrrs.com/graphkerneldatasets/MUTAG.zip",
+      "archive_sha256": "c419bdc853c367d2d83da4973c45100954ae15e10f5ae2cddde6ca431f8207f6",
+      "graph_count": 188,
+      "content_digest_required": true
+    },
+    "synthetic-sparse-label8": {
+      "kind": "generated",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "seed": 730201,
+      "graph_count": 256,
+      "vertex_count": {
+        "minimum": 24,
+        "maximum": 40
+      },
+      "topology": {
+        "connected": true,
+        "target_mean_degree": 4
+      },
+      "node_label_cardinality": 8,
+      "content_digest_required": true
+    },
+    "synthetic-dense-label2": {
+      "kind": "generated",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "seed": 730202,
+      "graph_count": 192,
+      "vertex_count": {
+        "minimum": 28,
+        "maximum": 36
+      },
+      "topology": {
+        "connected": true,
+        "edge_probability": 0.2
+      },
+      "node_label_cardinality": 2,
+      "content_digest_required": true
+    },
+    "synthetic-multiplicity": {
+      "kind": "generated",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "seed": 730203,
+      "graph_count": 256,
+      "vertex_count": {
+        "minimum": 40,
+        "maximum": 56
+      },
+      "topology": {
+        "connected": true,
+        "target_mean_degree": 4
+      },
+      "node_label_cardinality": 2,
+      "content_digest_required": true
+    },
+    "synthetic-regular-uniform": {
+      "kind": "generated",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "seed": 730204,
+      "graph_count": 256,
+      "vertex_count": {
+        "minimum": 32,
+        "maximum": 32
+      },
+      "topology": {
+        "connected": true,
+        "regular_degree": 4
+      },
+      "node_label_cardinality": 1,
+      "content_digest_required": true
+    },
+    "synthetic-query-novelty": {
+      "kind": "generated_train_query",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "seed": 730205,
+      "training_graph_count": 256,
+      "query_graph_count": 64,
+      "vertex_count": {
+        "minimum": 24,
+        "maximum": 40
+      },
+      "topology": {
+        "connected": true,
+        "target_mean_degree": 4
+      },
+      "training_node_label_cardinality": 8,
+      "query_novel_label_rate": 0.25,
+      "content_digest_required": true
+    }
+  },
+  "kernel_configurations": {
+    "wl-subtree-r5": {
+      "kernel": "wl_subtree",
+      "rounds": 5,
+      "node_labels": "categorical",
+      "edge_labels": "constant",
+      "normalized": false
+    },
+    "wl-oa-r5": {
+      "kernel": "wl_optimal_assignment",
+      "rounds": 5,
+      "node_labels": "categorical",
+      "edge_labels": "constant",
+      "normalized": false
+    },
+    "shortest-path-unlabeled": {
+      "kernel": "categorical_shortest_path",
+      "distance": "unit_hops",
+      "node_labels": "constant",
+      "pair_identity": "unordered_off_diagonal_reachable",
+      "normalized": false
+    },
+    "wl-subtree-cross-r5": {
+      "kernel": "wl_subtree_cross",
+      "rounds": 5,
+      "node_labels": "categorical",
+      "edge_labels": "constant",
+      "normalized": false
+    }
+  },
+  "rows": [
+    {
+      "id": "t1-wl-subtree-mutag",
+      "kernel": "wl-subtree-r5",
+      "corpus": "mutag-188",
+      "comparators": ["grakel"]
+    },
+    {
+      "id": "t1-wl-subtree-sparse",
+      "kernel": "wl-subtree-r5",
+      "corpus": "synthetic-sparse-label8",
+      "comparators": ["grakel"]
+    },
+    {
+      "id": "t1-wl-subtree-dense",
+      "kernel": "wl-subtree-r5",
+      "corpus": "synthetic-dense-label2",
+      "comparators": ["grakel"]
+    },
+    {
+      "id": "t1-wl-subtree-regular-julia",
+      "kernel": "wl-subtree-r5",
+      "corpus": "synthetic-regular-uniform",
+      "comparators": ["grakel", "graphkernels_jl"],
+      "graphkernels_jl_scope": "uniform-labeled regular graphs only"
+    },
+    {
+      "id": "t1-wl-oa-mutag",
+      "kernel": "wl-oa-r5",
+      "corpus": "mutag-188",
+      "comparators": ["grakel"]
+    },
+    {
+      "id": "t1-wl-oa-multiplicity",
+      "kernel": "wl-oa-r5",
+      "corpus": "synthetic-multiplicity",
+      "comparators": ["grakel"]
+    },
+    {
+      "id": "t1-shortest-path-mutag",
+      "kernel": "shortest-path-unlabeled",
+      "corpus": "mutag-188",
+      "comparators": ["grakel", "graphkernels_jl"],
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+    },
+    {
+      "id": "t1-shortest-path-sparse",
+      "kernel": "shortest-path-unlabeled",
+      "corpus": "synthetic-sparse-label8",
+      "comparators": ["grakel", "graphkernels_jl"],
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+    },
+    {
+      "id": "t1-shortest-path-regular-julia",
+      "kernel": "shortest-path-unlabeled",
+      "corpus": "synthetic-regular-uniform",
+      "comparators": ["grakel", "graphkernels_jl"],
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+    },
+    {
+      "id": "t1-wl-subtree-cross-novel",
+      "kernel": "wl-subtree-cross-r5",
+      "corpus": "synthetic-query-novelty",
+      "comparators": ["grakel"],
+      "scope": "unnormalized cross values"
+    }
+  ],
+  "expansion_rule": "Every row expands to both declared boundaries. Each expanded row is classified independently.",
+  "immutable_after_first_baseline": true
+}
