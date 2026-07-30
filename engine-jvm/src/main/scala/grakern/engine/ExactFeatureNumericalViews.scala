@@ -29,13 +29,50 @@ private[grakern] object ExactFeatureNumericalViews:
       ) => Boolean,
       execution: GramExecution
   ): Either[GramExecutionFailure, GramMatrix] =
+    gram(
+      features,
+      rows,
+      _ => 0,
+      sameCoordinate,
+      execution
+    )
+
+  def gram[Coordinate, Metadata](
+      features: FeatureMatrix[Coordinate, Metadata],
+      rows: Vector[ExactFeatureRow[Coordinate]],
+      coordinateHash: Coordinate => Int,
+      sameCoordinate: (
+          Coordinate,
+          Coordinate
+      ) => Boolean,
+      execution: GramExecution
+  ): Either[GramExecutionFailure, GramMatrix] =
     val size = rows.size
+    val indexedRows =
+      rows.map(row =>
+        ExactFeatureRow.Indexed(
+          row.entries,
+          coordinateHash
+        )
+      )
     val evaluated =
       execution match
         case GramExecution.Sequential =>
-          Right(evaluateRows(rows, sameCoordinate, 0 until size))
+          Right(
+            evaluateRows(
+              rows,
+              indexedRows,
+              sameCoordinate,
+              0 until size
+            )
+          )
         case policy: GramExecution.DeterministicParallel =>
-          evaluateParallel(rows, sameCoordinate, policy)
+          evaluateParallel(
+            rows,
+            indexedRows,
+            sameCoordinate,
+            policy
+          )
     evaluated.map { cells =>
       val builder = DMat.newBuilder(size, size)
       cells.foreach { cell =>
@@ -53,6 +90,9 @@ private[grakern] object ExactFeatureNumericalViews:
 
   private def evaluateRows[Coordinate](
       rows: Vector[ExactFeatureRow[Coordinate]],
+      indexedRows: Vector[
+        ExactFeatureRow.Indexed[Coordinate]
+      ],
       sameCoordinate: (
           Coordinate,
           Coordinate
@@ -65,7 +105,8 @@ private[grakern] object ExactFeatureNumericalViews:
         GramCell(
           left,
           right,
-          rows(left).dot(rows(right))(
+          indexedRows(right).dot(
+            rows(left),
             sameCoordinate
           )
         )
@@ -74,6 +115,9 @@ private[grakern] object ExactFeatureNumericalViews:
 
   private def evaluateParallel[Coordinate](
       rows: Vector[ExactFeatureRow[Coordinate]],
+      indexedRows: Vector[
+        ExactFeatureRow.Indexed[Coordinate]
+      ],
       sameCoordinate: (
           Coordinate,
           Coordinate
@@ -92,7 +136,12 @@ private[grakern] object ExactFeatureNumericalViews:
         tiles.map { tile =>
           new Callable[Vector[GramCell]]:
             def call(): Vector[GramCell] =
-              evaluateRows(rows, sameCoordinate, tile)
+              evaluateRows(
+                rows,
+                indexedRows,
+                sameCoordinate,
+                tile
+              )
         }
       Right(
         executor

@@ -30,3 +30,25 @@ For shortest path, GraKeL's ordered-pair counts are translated explicitly to
 Grakern's unordered-pair denotation. Use `--write` only when deliberately
 accepting reviewed oracle drift. Ordinary Scala tests read the committed JSON
 resources and do not require Python, NumPy, or GraKeL.
+
+## Performance-court worker
+
+`benchmark_worker.py` consumes one runner-issued worker job and writes one
+`grakern.performance-worker-result.v1` result. It reconstructs native GraKeL
+graphs from the neutral corpus for the public boundary, reuses only native
+topology for the prepared boundary, creates a fresh `GraphKernel` for every
+operation, and applies declared compatibility translations after timing.
+
+Verify every eligible Tier-1 row at both measurement boundaries:
+
+```bash
+uv run \
+  --python 3.11 \
+  --with grakel==0.1.10 \
+  --with numpy==1.26.4 \
+  --with jsonschema \
+  python -m unittest discover \
+  -s tools/grakel \
+  -p 'test_benchmark_worker.py' \
+  -v
+```

@@ -146,3 +146,44 @@ final class HierarchySuite extends FunSuite:
       ],
       true
     )
+
+  test("node-index acceleration resolves deliberate hash collisions"):
+    final case class CollisionNode(value: Int) derives CanEqual
+    given Hash[CollisionNode] with
+      def hash(value: CollisionNode): Int = 0
+      def eqv(
+          left: CollisionNode,
+          right: CollisionNode
+      ): Boolean =
+        left.value == right.value
+
+    val root = CollisionNode(0)
+    val branch = CollisionNode(1)
+    val leaf = CollisionNode(2)
+    val value =
+      Hierarchy
+        .build(
+          NonEmptyVector.of(root, branch, leaf),
+          root,
+          {
+            case `root`   => None
+            case `branch` => Some(root)
+            case `leaf`   => Some(branch)
+            case other    => fail(s"unexpected node $other")
+          },
+          node =>
+            NonNegativeFinite
+              .from(node.value.toDouble)
+              .toOption
+              .get,
+          Vector("leaf" -> leaf)
+        )
+        .toOption
+        .get
+
+    assertEquals(value.parentOf(leaf), Some(branch))
+    assertEquals(
+      value.leastCommonAncestor(leaf, branch),
+      Some(branch)
+    )
+    assertEquals(value.evaluate("leaf", "leaf"), 2.0)

@@ -86,7 +86,10 @@ final class WLCompiledKernel[V, N, E, NodeKey, EdgeKey] private[engine] (
     for
       left <- rows.lift(leftGraph)
       right <- rows.lift(rightGraph)
-    yield left.dot(right)(WLCompiler.sameCoordinate)
+    yield left.dot(right)(
+      WLCompiler.coordinateHash,
+      WLCompiler.sameCoordinate
+    )
 
   def cross[QueryV](
       samples: Vector[GraphSample[QueryV, N, E]]
@@ -263,6 +266,7 @@ object WLCompiler:
             .gram(
               features,
               rows,
+              WLCompiler.coordinateHash,
               WLCompiler.sameCoordinate,
               plan.options.gramExecution
             )
@@ -335,3 +339,8 @@ object WLCompiler:
           WLOAThresholdFeatures.sameFeature(first, second)
         case _ =>
           false)
+
+  private[engine] def coordinateHash(
+      coordinate: WLFeatureCoordinate
+  ): Int =
+    coordinate.hashCode()

@@ -14,22 +14,32 @@ final case class SampleIndex(keys: Vector[SampleKey]):
 
 final class FeatureDictionary[Coordinate] private[engine] (
     val coordinates: Vector[Coordinate],
+    private val coordinateHash: Coordinate => Int,
     private val sameCoordinate: (
         Coordinate,
         Coordinate
     ) => Boolean
 ):
+  private val buckets =
+    coordinates.indices.foldLeft(
+      Map.empty[Int, Vector[Int]]
+    ) { (current, index) =>
+      val hash = coordinateHash(coordinates(index))
+      current.updated(
+        hash,
+        current.getOrElse(hash, Vector.empty) :+ index
+      )
+    }
+
   def size: Int = coordinates.size
 
   def coordinate(index: Int): Option[Coordinate] =
     coordinates.lift(index)
 
   def indexOf(coordinate: Coordinate): Option[Int] =
-    coordinates.indexWhere(
-      sameCoordinate(_, coordinate)
-    ) match
-      case -1    => None
-      case index => Some(index)
+    buckets
+      .getOrElse(coordinateHash(coordinate), Vector.empty)
+      .find(index => sameCoordinate(coordinates(index), coordinate))
 
 final case class FeatureMetadata[+Metadata](
     columns: Vector[Metadata]
@@ -55,18 +65,57 @@ private[grakern] object ExactFeatureMatrix:
     LinAlgError,
     FeatureMatrix[Coordinate, Metadata]
   ] =
+    materialize(
+      sampleKeys,
+      rows,
+      _ => 0,
+      sameCoordinate,
+      metadata
+    )
+
+  def materialize[Coordinate, Metadata](
+      sampleKeys: Vector[SampleKey],
+      rows: Vector[ExactFeatureRow[Coordinate]],
+      coordinateHash: Coordinate => Int,
+      sameCoordinate: (
+          Coordinate,
+          Coordinate
+      ) => Boolean,
+      metadata: Coordinate => Metadata
+  ): Either[
+    LinAlgError,
+    FeatureMatrix[Coordinate, Metadata]
+  ] =
+    val coordinateBuilder =
+      Vector.newBuilder[Coordinate]
+    val observed =
+      scala.collection.mutable.ArrayBuffer.empty[Coordinate]
+    val buckets =
+      scala.collection.mutable.HashMap.empty[
+        Int,
+        Vector[Int]
+      ]
+    rows.iterator
+      .flatMap(_.entries.iterator.map(_._1))
+      .foreach { coordinate =>
+        val hash = coordinateHash(coordinate)
+        val candidates =
+          buckets.getOrElse(hash, Vector.empty)
+        if !candidates.exists(index => sameCoordinate(observed(index), coordinate))
+        then
+          val index = observed.size
+          observed += coordinate
+          coordinateBuilder += coordinate
+          buckets.update(hash, candidates :+ index)
+      }
     val coordinates =
-      rows.iterator
-        .flatMap(_.entries.iterator.map(_._1))
-        .foldLeft(Vector.empty[Coordinate]) { (current, coordinate) =>
-          if current.exists(
-              sameCoordinate(_, coordinate)
-            )
-          then current
-          else current :+ coordinate
-        }
+      coordinateBuilder.result()
     val dictionary =
-      new FeatureDictionary(coordinates, sameCoordinate)
+      new FeatureDictionary(
+        coordinates,
+        coordinateHash,
+        sameCoordinate
+      )
     val builder = Sparse.coo(rows.size, dictionary.size)
     rows.zipWithIndex.foreach { case (row, rowIndex) =>
       row.entries.foreach { case (coordinate, value) =>

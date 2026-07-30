@@ -7,6 +7,7 @@ val MunitV           = "1.3.4"
 val MunitScalaCheckV = "1.3.0"
 val DisciplineMunitV = "2.0.0"
 val ScalaCheckV      = "1.19.0"
+val CirceV           = "0.14.14"
 
 val Graph4sRevision = "ea5d2d762f85f5a0f97ee188deb5fac0ef2bcbaf"
 val GaleRevision    = "d55fe2f97196a76ab7879e1a12f1e92403aeba06"
@@ -63,7 +64,7 @@ lazy val galeCoreJVM = ProjectRef(galeBuild, "coreJVM")
 
 lazy val root = tlCrossRootProject
   .aggregate(core, graph4sAdapter, standard, laws)
-  .aggregate(engineJVM, architectureProbes)
+  .aggregate(engineJVM, architectureProbes, benchmarkWorker)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -125,6 +126,22 @@ lazy val architectureProbes = project
     publish / skip := true
   )
 
+lazy val benchmarkWorker = project
+  .in(file("benchmark-worker"))
+  .dependsOn(engineJVM)
+  .settings(strictSettings)
+  .settings(
+    name           := "grakern-benchmark-worker",
+    publish / skip := true,
+    libraryDependencies ++= Seq(
+      "io.circe" %% "circe-core"    % CirceV,
+      "io.circe" %% "circe-generic" % CirceV,
+      "io.circe" %% "circe-parser"   % CirceV
+    ),
+    assembly / mainClass       := Some("grakern.benchmark.WorkerMain"),
+    assembly / assemblyJarName := "grakern-benchmark-worker.jar"
+  )
+
 addCommandAlias(
   "compileAll",
   (
@@ -133,6 +150,7 @@ addCommandAlias(
         List("JVM", "JS", "Native").map(platform => s"$module$platform/compile")
       ) ++
       List("engineJVM/compile", "architectureProbes/compile")
+        ++ List("benchmarkWorker/compile")
   ).mkString(";", ";", "")
 )
 
@@ -144,5 +162,6 @@ addCommandAlias(
         List("JVM", "JS", "Native").map(platform => s"$module$platform/test")
       ) ++
       List("engineJVM/test", "architectureProbes/test")
+        ++ List("benchmarkWorker/test")
   ).mkString(";", ";", "")
 )

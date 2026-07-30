@@ -24,6 +24,7 @@ private[grakern] object WLFeatureMatrix:
     ExactFeatureMatrix.materialize(
       sampleKeys,
       rows,
+      WLCompiler.coordinateHash,
       WLCompiler.sameCoordinate,
       {
         case WLFeatureCoordinate(

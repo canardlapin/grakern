@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"bd-01KYRBCWMXZGPZSHNC6JAVBW5B","kind":"reserve_open","mode":"exclusive","op":"20260730T111225.045258Z-p47350-c0000-r313e-h2db742","paths":["benchmarks/court/","tools/grakel/","tools/graphkernels-jl/","benchmark-worker/","build.sbt"],"reservation_id":"rv-01KYSBKFENZW6YD51CPHQNYWQF","ts":"2026-07-30T11:12:25.045258Z","ttl_s":3600,"v":1}

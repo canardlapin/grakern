@@ -4,6 +4,7 @@ import cats.data.NonEmptyVector
 import cats.kernel.Hash
 import grakern.core.*
 import grakern.standard.wl.*
+import scala.collection.mutable
 
 enum WLHierarchyNode derives CanEqual:
   case Root
@@ -92,17 +93,14 @@ private[grakern] object WLObservedHierarchy:
         )
       }
     val finalColours =
-      graphBags.iterator
-        .flatMap(_.items)
-        .foldLeft(Vector.empty[WLColour]) { (current, colour) =>
-          if current.exists(_.equals(colour)) then current
-          else current :+ colour
-        }
+      distinctColours(
+        graphBags.iterator.flatMap(_.items)
+      )
     val leaves =
       finalColours.map(colour => colour -> WLHierarchyNode.Signature(colour))
 
     Hierarchy
-      .build(
+      .buildHashed(
         nodes,
         root,
         parent,
@@ -116,3 +114,22 @@ private[grakern] object WLObservedHierarchy:
           graphBags
         )
       )
+
+  private def distinctColours(
+      colours: Iterator[WLColour]
+  ): Vector[WLColour] =
+    val hash = Hash[WLColour]
+    val buckets =
+      mutable.HashMap.empty[Int, Vector[WLColour]]
+    val result = Vector.newBuilder[WLColour]
+    colours.foreach { colour =>
+      val observed =
+        buckets.getOrElse(hash.hash(colour), Vector.empty)
+      if !observed.exists(hash.eqv(_, colour)) then
+        buckets.update(
+          hash.hash(colour),
+          observed :+ colour
+        )
+        result += colour
+    }
+    result.result()

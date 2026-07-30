@@ -31,3 +31,20 @@ translation to Grakern's unordered categorical denotation.
 
 Use `--write` only after reviewing intentional oracle drift. Ordinary Scala
 tests consume the fixtures without requiring Julia.
+
+## Performance-court worker
+
+`benchmark_worker.jl` consumes one runner-issued worker job and writes one
+`grakern.performance-worker-result.v1` result. It reconstructs native
+GraphKernels.jl graphs from the neutral corpus for the public boundary, reuses
+only native topology for the prepared boundary, creates a fresh kernel for
+every operation, and applies the declared shortest-path factor-of-eight
+translation after timing.
+
+Verify every eligible Tier-1 row at both boundaries:
+
+```bash
+JULIA_DEPOT_PATH=/tmp/grakern-graphkernels-julia \
+  julia --project=tools/graphkernels-jl \
+  tools/graphkernels-jl/test_benchmark_worker.jl
+```

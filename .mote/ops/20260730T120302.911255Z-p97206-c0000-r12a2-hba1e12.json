@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"bd-01KYRBCWMXZGPZSHNC6JAVBW5B","kind":"reserve_open","mode":"exclusive","op":"20260730T120302.911255Z-p97206-c0000-r12a2-hba1e12","paths":["engine-jvm/src/test/scala/grakern/engine/ExactFeatureIndexSuite.scala"],"reservation_id":"rv-01KYSEG63Z1KVCA0890F9MCWTN","ts":"2026-07-30T12:03:02.911255Z","ttl_s":3600,"v":1}
