@@ -1169,12 +1169,32 @@ def validate_worker_invocation(
             f"worker median mismatch for {job['id']}: "
             f"{metrics['wall_clock_median_ns']} != {expected_median}"
         )
-    if sampling["batch_size"] > 1 and expected_median >= 100_000_000:
-        raise CourtError(
-            f"worker batched an operation at or above 100 ms for {job['id']}"
+    calibration_ns = sampling["calibration_ns"]
+    if sampling["mode"] == "cold":
+        if calibration_ns is not None:
+            raise CourtError(
+                f"worker cold calibration must be null for {job['id']}"
+            )
+        if sampling["batch_size"] != 1:
+            raise CourtError(f"worker cold batch_size must equal 1 for {job['id']}")
+    else:
+        if not isinstance(calibration_ns, int) or calibration_ns <= 0:
+            raise CourtError(
+                f"worker warm calibration must be positive for {job['id']}"
+            )
+        expected_batch_size = (
+            1
+            if calibration_ns >= 100_000_000
+            else min(
+                100_000,
+                max(1, math.ceil(120_000_000 / calibration_ns)),
+            )
         )
-    if sampling["mode"] == "cold" and sampling["batch_size"] != 1:
-        raise CourtError(f"worker cold batch_size must equal 1 for {job['id']}")
+        if sampling["batch_size"] != expected_batch_size:
+            raise CourtError(
+                f"worker calibrated batch mismatch for {job['id']}: "
+                f"{sampling['batch_size']} != {expected_batch_size}"
+            )
 
 
 def aggregate_availability(
@@ -1253,6 +1273,7 @@ def aggregate_workers(
         if observed:
             semantic[field] = max(observed)
     sampling_values = [worker["sampling"] for worker in workers]
+    calibration_ns = [sampling["calibration_ns"] for sampling in sampling_values]
     batch_sizes = [sampling["batch_size"] for sampling in sampling_values]
     if contract["mode"] == "cold":
         durations = [
@@ -1361,6 +1382,7 @@ def aggregate_workers(
                 "forks": contract["forks"],
                 "warmups_per_fork": contract["warmups"],
                 "samples_per_fork": contract["samples"],
+                "calibration_ns": calibration_ns,
                 "batch_sizes": batch_sizes,
                 "timed_work_ns": timed_work,
                 "execution_order_seed": execution_order_seed,

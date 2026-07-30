@@ -92,6 +92,7 @@ def cold_invocation(
             "fork_index": fork_index,
             "warmups": 0,
             "samples": 1,
+            "calibration_ns": None,
             "batch_size": 1,
             "timed_work_ns": 1,
             "durations_ns": [1],
@@ -377,6 +378,51 @@ class CourtContractSuite(unittest.TestCase):
             {check["id"] for check in worker["proof_checks"]},
         )
 
+    def test_warm_batch_is_verified_from_untimed_calibration(
+        self,
+    ) -> None:
+        job = {
+            "id": "warm-calibration-fixture",
+            "implementation": "grakern",
+            "language": "scala-jvm",
+            "mode": "warm",
+            "sampling_policy": "standard",
+            "application_threads": 1,
+            "blas_threads": 1,
+        }
+        invocation = cold_invocation(job, fork_index=0, elapsed_ns=1)
+        sampling = invocation["worker"]["sampling"]
+        sampling.update(
+            {
+                "mode": "warm",
+                "warmups": 10,
+                "samples": 30,
+                "calibration_ns": 99_000_000,
+                "batch_size": 2,
+                "timed_work_ns": 7_500_000_000,
+                "durations_ns": [250_000_000 for _ in range(30)],
+            }
+        )
+        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 125_000_000
+
+        court.validate_worker_invocation(
+            job,
+            invocation["worker"],
+            fork_index=0,
+        )
+
+        sampling["batch_size"] = 1
+        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 250_000_000
+        with self.assertRaisesRegex(
+            court.CourtError,
+            "calibrated batch mismatch",
+        ):
+            court.validate_worker_invocation(
+                job,
+                invocation["worker"],
+                fork_index=0,
+            )
+
     def test_source_snapshot_detects_content_and_dirty_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -463,6 +509,7 @@ result = {
         "fork_index": job["execution"]["fork_index"],
         "warmups": contract["warmups"],
         "samples": contract["samples"],
+        "calibration_ns": max(1, duration),
         "batch_size": 1,
         "timed_work_ns": sum(durations),
         "durations_ns": durations

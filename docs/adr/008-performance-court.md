@@ -139,8 +139,10 @@ The initial sampling contract is:
 Each fresh worker process performs its warmups, then one untimed calibration
 operation, and fixes that fork's batch count before sampling. Batch counts may
 differ across forks because calibration is process-local; receipts retain one
-batch count per fork and normalize each raw sample with its own count. When
-calibration is shorter than 100 ms, the batch targets at least 120 ms;
+calibration duration and batch count per fork and normalize each raw sample
+with its own count. The runner verifies the batch decision from that recorded
+untimed calibration rather than reclassifying it from later timed samples.
+When calibration is shorter than 100 ms, the batch targets at least 120 ms;
 otherwise the batch is one. Combined with 30 samples across 10 forks, the
 standard policy targets at least 30 seconds of timed work without batching an
 operation at or above 100 ms, with margin for ordinary timing variation. The

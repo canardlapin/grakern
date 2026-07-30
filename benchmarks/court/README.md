@@ -202,7 +202,9 @@ of at least 120 ms per sample; operations at or above that boundary are never
 batched. Across 10 independent forks this constructively targets the 30-second
 evidence floor with timing margin, which the runner also checks from the raw
 durations. Because calibration is process-local, the receipt retains each
-fork's batch size and normalizes that fork's samples independently.
+fork's untimed calibration duration and batch size and normalizes that fork's
+samples independently. The runner checks the fixed batch decision against the
+recorded calibration, not against the later timed median.
 
 For an implementation whose complete operation exceeds two seconds, a plan may
 select `expensive_row` for that job alone. It then receives five forks and five

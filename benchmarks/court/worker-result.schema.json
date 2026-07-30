@@ -208,6 +208,7 @@
         "fork_index",
         "warmups",
         "samples",
+        "calibration_ns",
         "batch_size",
         "timed_work_ns",
         "durations_ns"
@@ -227,6 +228,16 @@
         },
         "samples": {
           "$ref": "#/$defs/positiveInteger"
+        },
+        "calibration_ns": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/positiveInteger"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "batch_size": {
           "$ref": "#/$defs/positiveInteger"

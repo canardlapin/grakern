@@ -200,17 +200,17 @@ private[benchmark] object WorkerEngine:
         case Right(result) => last = Some(result)
       warmup += 1
 
-    val batchSize =
-      if contract.mode == "cold" then 1
+    val (batchSize, calibrationNanos) =
+      if contract.mode == "cold" then (1, Option.empty[Long])
       else
         val calibrationStarted = System.nanoTime()
         operation(context) match
           case Left(error)   => return Left(error)
           case Right(result) =>
             last = Some(result)
-        chooseBatchSize(
-          System.nanoTime() - calibrationStarted
-        )
+        val elapsed =
+          math.max(1L, System.nanoTime() - calibrationStarted)
+        (chooseBatchSize(elapsed), Some(elapsed))
 
     val durations = Vector.newBuilder[Long]
     val phaseSamples =
@@ -328,6 +328,8 @@ private[benchmark] object WorkerEngine:
           ),
           "warmups" -> Json.fromInt(contract.warmups),
           "samples" -> Json.fromInt(contract.samples),
+          "calibration_ns" -> calibrationNanos
+            .fold(Json.Null)(Json.fromLong),
           "batch_size" -> Json.fromInt(batchSize),
           "timed_work_ns" -> Json.fromLong(
             durationValues.sum

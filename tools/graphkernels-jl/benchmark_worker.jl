@@ -243,12 +243,13 @@ function run_worker(payload::Dict{String, Any})
         last_matrix, _, last_rows, last_columns = evaluate_once(context)
     end
 
+    calibration_ns = nothing
     batch_size = 1
     if mode != "cold"
         calibration_started = time_ns()
         last_matrix, _, last_rows, last_columns =
             evaluate_once(context)
-        calibration_ns = Int(time_ns() - calibration_started)
+        calibration_ns = max(1, Int(time_ns() - calibration_started))
         batch_size = choose_batch_size(calibration_ns, mode)
     end
 
@@ -326,6 +327,7 @@ function run_worker(payload::Dict{String, Any})
             "fork_index" => payload["execution"]["fork_index"],
             "warmups" => contract["warmups"],
             "samples" => contract["samples"],
+            "calibration_ns" => calibration_ns,
             "batch_size" => batch_size,
             "timed_work_ns" => sum(durations),
             "durations_ns" => durations,

@@ -280,6 +280,7 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
     for _ in range(contract["warmups"]):
         last_matrix, _, last_rows, last_columns = evaluate_once(context)
 
+    calibration_ns: int | None = None
     if mode == "cold":
         batch_size = 1
     else:
@@ -290,7 +291,7 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
             last_rows,
             last_columns,
         ) = evaluate_once(context)
-        calibration_ns = time.perf_counter_ns() - calibration_started
+        calibration_ns = max(1, time.perf_counter_ns() - calibration_started)
         batch_size = choose_batch_size(calibration_ns, mode)
 
     durations: list[int] = []
@@ -371,6 +372,7 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
             "fork_index": payload["execution"]["fork_index"],
             "warmups": contract["warmups"],
             "samples": contract["samples"],
+            "calibration_ns": calibration_ns,
             "batch_size": batch_size,
             "timed_work_ns": sum(durations),
             "durations_ns": durations,
