@@ -6,10 +6,62 @@ import java.nio.file.{Files, Path}
 import munit.FunSuite
 
 final class WorkerEngineSuite extends FunSuite:
-  test("standard batching targets 120 ms without batching 100 ms operations") {
-    assertEquals(WorkerEngine.chooseBatchSize(1_000_000L), 120)
-    assertEquals(WorkerEngine.chooseBatchSize(99_000_000L), 2)
-    assertEquals(WorkerEngine.chooseBatchSize(100_000_000L), 1)
+  test("batching rounds up to the target timed work") {
+    assertEquals(
+      WorkerEngine.chooseBatchSize(
+        1_000_000L,
+        120_000_000L
+      ),
+      120
+    )
+    assertEquals(
+      WorkerEngine.chooseBatchSize(
+        100_000_000L,
+        120_000_000L
+      ),
+      2
+    )
+    assertEquals(
+      WorkerEngine.chooseBatchSize(
+        120_000_000L,
+        120_000_000L
+      ),
+      1
+    )
+    assertEquals(
+      WorkerEngine.chooseBatchSize(
+        50_000_000L,
+        1_440_000_000L
+      ),
+      29
+    )
+  }
+
+  test("sample target preserves the 36 second evidence margin") {
+    assertEquals(
+      WorkerEngine.targetSampleNanosFor(
+        SamplingContract(
+          forks = 10,
+          mode = "warm",
+          policy = "standard",
+          warmups = 10,
+          samples = 30
+        )
+      ),
+      120_000_000L
+    )
+    assertEquals(
+      WorkerEngine.targetSampleNanosFor(
+        SamplingContract(
+          forks = 5,
+          mode = "warm",
+          policy = "expensive_row",
+          warmups = 10,
+          samples = 5
+        )
+      ),
+      1_440_000_000L
+    )
   }
 
   private val repository =
@@ -72,6 +124,7 @@ final class WorkerEngineSuite extends FunSuite:
           "fork_index" -> Json.fromInt(0)
         ),
         "sampling_contract" -> Json.obj(
+          "forks" -> Json.fromInt(1),
           "mode" -> Json.fromString("cold"),
           "policy" -> Json.fromString("standard"),
           "warmups" -> Json.fromInt(0),

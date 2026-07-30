@@ -55,6 +55,7 @@ private[benchmark] object WorkerExecution:
   given Decoder[WorkerExecution] = deriveDecoder
 
 final private[benchmark] case class SamplingContract(
+    forks: Int,
     mode: String,
     policy: String,
     warmups: Int,
@@ -135,7 +136,8 @@ final private[benchmark] case class OperationContext(
 )
 
 private[benchmark] object WorkerEngine:
-  private val TargetSampleNanos = 120_000_000L
+  private val TargetCourtTimedNanos = 36_000_000_000L
+  private val MinimumTargetSampleNanos = 120_000_000L
   private val MaximumBatchSize = 100_000
   private val ThreadEnvironment =
     Set(
@@ -203,14 +205,48 @@ private[benchmark] object WorkerEngine:
     val (batchSize, calibrationNanos) =
       if contract.mode == "cold" then (1, Option.empty[Long])
       else
+        val targetSampleNanos =
+          targetSampleNanosFor(contract)
         val calibrationStarted = System.nanoTime()
         operation(context) match
           case Left(error)   => return Left(error)
           case Right(result) =>
             last = Some(result)
-        val elapsed =
+        val firstElapsed =
           math.max(1L, System.nanoTime() - calibrationStarted)
-        (chooseBatchSize(elapsed), Some(elapsed))
+        val pilotBatch =
+          chooseBatchSize(
+            firstElapsed,
+            targetSampleNanos
+          )
+        var observedNanos =
+          firstElapsed
+        var pilot = 0
+        while pilot < 2 do
+          var operationIndex = 0
+          while operationIndex < pilotBatch do
+            val operationStarted =
+              System.nanoTime()
+            operation(context) match
+              case Left(error)   => return Left(error)
+              case Right(result) =>
+                last = Some(result)
+            observedNanos = math.min(
+              observedNanos,
+              math.max(
+                1L,
+                System.nanoTime() - operationStarted
+              )
+            )
+            operationIndex += 1
+          pilot += 1
+        (
+          chooseBatchSize(
+            observedNanos,
+            targetSampleNanos
+          ),
+          Some(observedNanos)
+        )
 
     val durations = Vector.newBuilder[Long]
     val phaseSamples =
@@ -614,17 +650,33 @@ private[benchmark] object WorkerEngine:
       .mkString
 
   private[benchmark] def chooseBatchSize(
-      calibrationNanos: Long
+      calibrationNanos: Long,
+      targetSampleNanos: Long
   ): Int =
-    if calibrationNanos >= 100_000_000L then 1
-    else
-      val estimate =
-        math.max(
-          1L,
-          (TargetSampleNanos + calibrationNanos - 1L) /
-            math.max(1L, calibrationNanos)
-        )
-      math.min(estimate, MaximumBatchSize.toLong).toInt
+    val elapsed =
+      math.max(1L, calibrationNanos)
+    val target =
+      math.max(1L, targetSampleNanos)
+    val estimate =
+      math.max(
+        1L,
+        (target + elapsed - 1L) / elapsed
+      )
+    math.min(estimate, MaximumBatchSize.toLong).toInt
+
+  private[benchmark] def targetSampleNanosFor(
+      contract: SamplingContract
+  ): Long =
+    val measurementCount =
+      math.max(
+        1L,
+        contract.forks.toLong * contract.samples.toLong
+      )
+    math.max(
+      MinimumTargetSampleNanos,
+      (TargetCourtTimedNanos + measurementCount - 1L) /
+        measurementCount
+    )
 
   private def median(values: Vector[Double]): Double =
     val sorted = values.sorted
