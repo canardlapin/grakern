@@ -36,7 +36,7 @@ enum SoftShortestPathCompileError[V]:
   )
 
 final case class SoftShortestPathExecutionStats(
-    apsp: WeightedShortestPathAPSPStats,
+    apsp: ShortestPathAPSPStats,
     graphPairEvaluations: Long,
     partPairEvaluations: Long
 )
@@ -44,6 +44,7 @@ final case class SoftShortestPathExecutionStats(
 final private[grakern] class CompiledSoftShortestPathKernel[V] private[engine] (
     val sampleKeys: Vector[SampleKey],
     val gram: GramMatrix,
+    val operator: KernelOperator,
     val semanticFingerprint: Fingerprintability,
     val normalized: Boolean,
     val auditEvents: Vector[NumericalAuditEvent],
@@ -71,11 +72,28 @@ object SoftShortestPathCompiler:
     SoftShortestPathCompileError[V],
     CompiledSoftShortestPathKernel[V]
   ] =
+    preparePlanned(
+      samples,
+      kernel,
+      diagonalTolerance,
+      PlanNodeId.fresh()
+    )
+
+  private[engine] def preparePlanned[V, N, E, Key](
+      samples: Vector[GraphSample[V, N, E]],
+      kernel: SoftShortestPathKernel[N, E, Key],
+      diagonalTolerance: NonNegativeFinite,
+      apspPlanNodeId: PlanNodeId
+  ): Either[
+    SoftShortestPathCompileError[V],
+    CompiledSoftShortestPathKernel[V]
+  ] =
     val selected = semantic(kernel.expression)
     WeightedShortestPathAPSP
       .prepare(
         samples,
-        selected.base.recipe.edgeLengths
+        selected.base.recipe.edgeLengths,
+        apspPlanNodeId
       )
       .left
       .map(SoftShortestPathCompileError.Dijkstra(_))
@@ -115,11 +133,16 @@ object SoftShortestPathCompiler:
                     )
                   else Right(raw -> Vector.empty)
                 normalized.map { case (values, events) =>
-                  new CompiledSoftShortestPathKernel(
-                    trace.sampleKeys,
+                  val gram =
                     GramMatrix(
                       toMatrix(trace.sampleKeys.size, values),
                       SampleIndex(trace.sampleKeys)
+                    )
+                  new CompiledSoftShortestPathKernel(
+                    trace.sampleKeys,
+                    gram,
+                    ExactFeatureNumericalViews.operatorFromGram(
+                      gram
                     ),
                     kernel.fingerprintability,
                     selected.normalized,

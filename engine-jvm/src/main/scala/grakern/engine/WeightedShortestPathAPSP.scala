@@ -6,13 +6,6 @@ import grakern.standard.shortestpath.*
 import graph4s.Edge
 import java.util.{Arrays, Comparator, PriorityQueue}
 
-final case class WeightedShortestPathAPSPStats(
-    graphTransforms: Int,
-    sourceSearches: Int,
-    matrixEntries: Long,
-    reachableUnorderedPairs: Long
-)
-
 enum WeightedShortestPathAPSPError[V]:
   case PackedCorpus(error: PackedCorpusError[V])
   case EdgeProjection(
@@ -42,7 +35,7 @@ final private[grakern] class WeightedAPSPTrace[V, N, E] private[engine] (
     val edgeLengthPlanNodeId: PlanNodeId,
     private val corpus: PackedGraphCorpus[V, N, E],
     private val blocks: Vector[WeightedDistanceBlock],
-    val stats: WeightedShortestPathAPSPStats
+    val stats: ShortestPathAPSPStats
 ):
   def sampleKeys: Vector[SampleKey] =
     corpus.sampleKeys
@@ -267,6 +260,20 @@ object WeightedShortestPathAPSP:
     WeightedShortestPathAPSPError[V],
     WeightedAPSPTrace[V, N, E]
   ] =
+    prepare(
+      samples,
+      edgeLengths,
+      PlanNodeId.fresh()
+    )
+
+  private[engine] def prepare[V, N, E](
+      samples: Vector[GraphSample[V, N, E]],
+      edgeLengths: WeightedEdgeLengths[E],
+      planNodeId: PlanNodeId
+  ): Either[
+    WeightedShortestPathAPSPError[V],
+    WeightedAPSPTrace[V, N, E]
+  ] =
     PackedGraphCorpus
       .pack(samples)
       .left
@@ -309,11 +316,11 @@ object WeightedShortestPathAPSP:
               graphIndex += 1
             failure.toLeft(
               new WeightedAPSPTrace(
-                PlanNodeId.fresh(),
+                planNodeId,
                 edgeLengths.planNodeId,
                 corpus,
                 completed.result(),
-                WeightedShortestPathAPSPStats(
+                ShortestPathAPSPStats(
                   graphTransforms = corpus.graphCount,
                   sourceSearches = corpus.vertexCount,
                   matrixEntries,

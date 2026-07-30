@@ -162,6 +162,15 @@ object ShortestPathAPSP:
     ShortestPathAPSPError[V],
     UnweightedAPSPTrace[V, N, E]
   ] =
+    prepare(samples, PlanNodeId.fresh())
+
+  private[engine] def prepare[V, N, E](
+      samples: Vector[GraphSample[V, N, E]],
+      planNodeId: PlanNodeId
+  ): Either[
+    ShortestPathAPSPError[V],
+    UnweightedAPSPTrace[V, N, E]
+  ] =
     PackedGraphCorpus
       .pack(samples)
       .left
@@ -184,7 +193,7 @@ object ShortestPathAPSP:
           graphIndex += 1
         failure.toLeft(
           new UnweightedAPSPTrace(
-            PlanNodeId.fresh(),
+            planNodeId,
             corpus,
             completed.result(),
             ShortestPathAPSPStats(

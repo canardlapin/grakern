@@ -11,6 +11,7 @@ final case class GramMatrix(
 
 enum KernelOperatorRealization derives CanEqual:
   case FeatureBacked
+  case GramBacked
 
 final case class KernelOperator(
     values: DoubleLinearOperator,
@@ -126,4 +127,21 @@ private[grakern] object ExactFeatureNumericalViews:
       operator,
       features.rows,
       KernelOperatorRealization.FeatureBacked
+    )
+
+  def operatorFromGram(
+      gram: GramMatrix
+  ): KernelOperator =
+    val values = gram.values
+    val operator =
+      LinearOperator.fromFunction(
+        values.rows,
+        values.cols
+      ) { (input: DVec, output: MutableDVec) =>
+        values.applyTo(input, output)
+      }
+    KernelOperator(
+      operator,
+      gram.samples,
+      KernelOperatorRealization.GramBacked
     )
