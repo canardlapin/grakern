@@ -110,3 +110,59 @@ final class PackedGraphCorpusSuite extends FunSuite:
 
     assertEquals(result.map(_.size), Right(1))
     assertEquals(result.map(_(0)), Right(-0.25))
+
+  test("edge numeric projections reject negative values with edge provenance"):
+    final case class WeightedBond(length: Double)
+    val topology = Graph.fromEdges(Link(1, 2)).toOption.get
+    val sample =
+      GraphSample.build(SampleKey("negative-edge"), topology)(
+        nodeValue = id => Atom(s"A$id", 0.0),
+        edgeValue = _ => WeightedBond(-0.25)
+      )
+    val packed = PackedGraphCorpus.pack(Vector(sample)).toOption.get
+    val result =
+      packed.nonNegativeEdgeColumn(
+        ProjectionDescriptor("bond.length")
+      )(_.length)
+
+    result match
+      case Left(
+            PrepareError.InvalidNumeric(
+              SourceRef.Edge(sample, edge),
+              projection,
+              value,
+              NumericError.Negative(_)
+            )
+          ) =>
+        assertEquals(sample, SampleKey("negative-edge"))
+        assertEquals(edge, topology.edges.head)
+        assertEquals(
+          projection,
+          ProjectionDescriptor("bond.length")
+        )
+        assertEquals(value, -0.25)
+      case other =>
+        fail(s"expected negative edge diagnostic, observed $other")
+
+  test("finite nonnegative edge projections use a primitive column"):
+    final case class WeightedBond(length: Double)
+    val topology =
+      Graph.fromEdges(Link(1, 2), Link(2, 3)).toOption.get
+    val sample =
+      GraphSample.build(SampleKey("weighted"), topology)(
+        nodeValue = id => Atom(s"A$id", 0.0),
+        edgeValue = edge =>
+          if edge.contains(1) then WeightedBond(0.0)
+          else WeightedBond(1.5)
+      )
+    val packed = PackedGraphCorpus.pack(Vector(sample)).toOption.get
+    val result =
+      packed.nonNegativeEdgeColumn(
+        ProjectionDescriptor("bond.length")
+      )(_.length)
+
+    assertEquals(result.map(_.size), Right(2))
+    assertEquals(
+      result.map(column => Vector.tabulate(column.size)(column.apply).sorted),
+      Right(Vector(0.0, 1.5))
+    )
