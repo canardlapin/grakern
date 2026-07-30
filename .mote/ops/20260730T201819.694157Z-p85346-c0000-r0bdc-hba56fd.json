@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"bd-01KYRBCWVFJTS55YG0RJPK14V7","kind":"reserve_open","mode":"exclusive","op":"20260730T201819.694157Z-p85346-c0000-r0bdc-hba56fd","paths":["benchmarks/court/run_performance_court.py","benchmarks/court/tests/test_run_performance_court.py"],"reservation_id":"rv-01KYTAV2DEVMWDRVBDKDFF452K","ts":"2026-07-30T20:18:19.694157Z","ttl_s":3600,"v":1}

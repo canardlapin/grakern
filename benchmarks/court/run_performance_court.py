@@ -45,6 +45,10 @@ except ImportError as error:  # pragma: no cover - exercised by CLI users
 SCHEMA_VERSION = "grakern.performance-court-state.v1"
 SCRIPT_PATH = Path(__file__).resolve()
 COURT_DIRECTORY = SCRIPT_PATH.parent
+TARGET_WARM_TIMED_WORK_NS = 60_000_000_000
+MINIMUM_TARGET_SAMPLE_NS = 200_000_000
+MAXIMUM_BATCH_SIZE = 100_000
+MINIMUM_ACCEPTED_TIMED_WORK_NS = 30_000_000_000
 
 
 class CourtError(RuntimeError):
@@ -836,6 +840,29 @@ def sampling_contract(job: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def target_sample_nanos(contract: dict[str, Any]) -> int:
+    measurement_count = max(1, contract["forks"] * contract["samples"])
+    return max(
+        MINIMUM_TARGET_SAMPLE_NS,
+        math.ceil(TARGET_WARM_TIMED_WORK_NS / measurement_count),
+    )
+
+
+def calibrated_batch_size(
+    calibration_ns: int,
+    contract: dict[str, Any],
+) -> int:
+    return min(
+        MAXIMUM_BATCH_SIZE,
+        max(
+            1,
+            math.ceil(
+                target_sample_nanos(contract) / max(1, calibration_ns)
+            ),
+        ),
+    )
+
+
 def rotating_schedule(
     jobs: Sequence[dict[str, Any]],
     group: tuple[str, str, str],
@@ -1182,13 +1209,9 @@ def validate_worker_invocation(
             raise CourtError(
                 f"worker warm calibration must be positive for {job['id']}"
             )
-        expected_batch_size = (
-            1
-            if calibration_ns >= 100_000_000
-            else min(
-                100_000,
-                max(1, math.ceil(120_000_000 / calibration_ns)),
-            )
+        expected_batch_size = calibrated_batch_size(
+            calibration_ns,
+            contract,
         )
         if sampling["batch_size"] != expected_batch_size:
             raise CourtError(
@@ -1286,7 +1309,10 @@ def aggregate_workers(
     else:
         durations = [sampling["durations_ns"] for sampling in sampling_values]
     timed_work = sum(duration for fork in durations for duration in fork)
-    if contract["mode"] == "warm" and timed_work < 30_000_000_000:
+    if (
+        contract["mode"] == "warm"
+        and timed_work < MINIMUM_ACCEPTED_TIMED_WORK_NS
+    ):
         raise CourtError(f"worker timed work below 30 seconds for {job['id']}")
     per_operation = [
         duration / batch_size

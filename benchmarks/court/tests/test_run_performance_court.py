@@ -398,12 +398,12 @@ class CourtContractSuite(unittest.TestCase):
                 "warmups": 10,
                 "samples": 30,
                 "calibration_ns": 99_000_000,
-                "batch_size": 2,
-                "timed_work_ns": 7_500_000_000,
-                "durations_ns": [250_000_000 for _ in range(30)],
+                "batch_size": 3,
+                "timed_work_ns": 9_000_000_000,
+                "durations_ns": [300_000_000 for _ in range(30)],
             }
         )
-        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 125_000_000
+        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 100_000_000
 
         court.validate_worker_invocation(
             job,
@@ -411,8 +411,8 @@ class CourtContractSuite(unittest.TestCase):
             fork_index=0,
         )
 
-        sampling["batch_size"] = 1
-        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 250_000_000
+        sampling["batch_size"] = 2
+        invocation["worker"]["metrics"]["wall_clock_median_ns"] = 150_000_000
         with self.assertRaisesRegex(
             court.CourtError,
             "calibrated batch mismatch",
@@ -473,7 +473,7 @@ duration = (
     if contract["policy"] == "expensive_row"
     else 100_000_000
 )
-durations = [duration for _ in range(contract["samples"])]
+durations = [duration * 2 for _ in range(contract["samples"])]
 checksum = "a" * 64
 result = {
     "schema_version": "grakern.performance-worker-result.v1",
@@ -510,7 +510,7 @@ result = {
         "warmups": contract["warmups"],
         "samples": contract["samples"],
         "calibration_ns": max(1, duration),
-        "batch_size": 1,
+        "batch_size": 2,
         "timed_work_ns": sum(durations),
         "durations_ns": durations
     },
