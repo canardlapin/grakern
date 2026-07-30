@@ -31,6 +31,19 @@ class GraKeLBenchmarkWorkerSuite(unittest.TestCase):
             "expected_output": row["expected_output"],
         }
 
+    def test_standard_batching_targets_100_ms_without_batching_boundary(
+        self,
+    ) -> None:
+        self.assertEqual(benchmark_worker.choose_batch_size(1_000_000, "warm"), 100)
+        self.assertEqual(
+            benchmark_worker.choose_batch_size(99_000_000, "warm"),
+            2,
+        )
+        self.assertEqual(
+            benchmark_worker.choose_batch_size(100_000_000, "warm"),
+            1,
+        )
+
     def test_every_eligible_row_matches_the_independent_oracle(self) -> None:
         for row in self.tier1["rows"]:
             if "grakel" not in row["comparators"]:

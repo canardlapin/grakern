@@ -135,7 +135,7 @@ final private[benchmark] case class OperationContext(
 )
 
 private[benchmark] object WorkerEngine:
-  private val TargetSampleNanos = 350_000_000L
+  private val TargetSampleNanos = 100_000_000L
   private val MaximumBatchSize = 100_000
   private val ThreadEnvironment =
     Set(
@@ -609,7 +609,7 @@ private[benchmark] object WorkerEngine:
       .map(byte => f"${byte & 0xff}%02x")
       .mkString
 
-  private def chooseBatchSize(
+  private[benchmark] def chooseBatchSize(
       calibrationNanos: Long
   ): Int =
     if calibrationNanos >= 100_000_000L then 1

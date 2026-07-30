@@ -25,7 +25,7 @@ import numpy as np
 from grakel import GraphKernel
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-TARGET_SAMPLE_NS = 350_000_000
+TARGET_SAMPLE_NS = 100_000_000
 MAX_BATCH_SIZE = 100_000
 THREAD_ENVIRONMENT = (
     "GRAKERN_COURT_APPLICATION_THREADS",

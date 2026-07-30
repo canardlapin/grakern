@@ -6,6 +6,10 @@ const TIER1 = read_json(
     joinpath(REPOSITORY, "benchmarks", "court", "tier1.json"),
 )
 
+@assert choose_batch_size(1_000_000, "warm") == 100
+@assert choose_batch_size(99_000_000, "warm") == 2
+@assert choose_batch_size(100_000_000, "warm") == 1
+
 function payload(row::Dict{String, Any}, boundary::String)
     return Dict{String, Any}(
         "job" => Dict{String, Any}(

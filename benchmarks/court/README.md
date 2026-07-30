@@ -196,6 +196,12 @@ workers must report allocation measurements. For a floating-tolerance row,
 the worker must return maximum absolute and relative errors as well as both
 tolerances.
 
+A standard warm fork records 30 samples after 10 warmups. Operations shorter
+than 100 ms are batched to a target of at least 100 ms per sample; operations
+at or above that boundary are never batched. Across 10 independent forks this
+constructively targets the 30-second evidence floor, which the runner also
+checks from the raw durations.
+
 For cold forks, the receipt uses the runner-observed duration from process
 launch through successful exit. This includes runtime startup and worker
 verification overhead. Cold latency is reported separately and never decides

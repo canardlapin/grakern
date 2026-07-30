@@ -9,7 +9,7 @@ using Statistics
 
 const REPOSITORY = normpath(joinpath(@__DIR__, "..", ".."))
 const REVISION = "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
-const TARGET_SAMPLE_NS = 350_000_000
+const TARGET_SAMPLE_NS = 100_000_000
 const MAX_BATCH_SIZE = 100_000
 const THREAD_ENVIRONMENT = [
     "GRAKERN_COURT_APPLICATION_THREADS",

@@ -131,17 +131,23 @@ the Tier-1 speed winner. Warm wall-clock time decides the speed classification.
 The initial sampling contract is:
 
 - at least 10 independent process forks;
-- at least 10 timed operations per fork;
+- 30 timed samples per fork for a standard warm row;
 - at least 10 untimed warmup operations per fork;
 - a calibrated inner batch only when one operation is shorter than 100 ms;
 - at least 30 seconds of timed work for each implementation and row.
 
-Calibration runs in a disposable process. The recorded process uses the fixed
-batch count chosen by calibration. The court runner launches one fresh worker
-process per fork and rotates implementation position deterministically within
-each row, boundary, and mode. The receipt stores the execution-order seed and
-schedule digest together with every raw duration and its fork and batch
-membership.
+Each fresh worker process performs one untimed calibration operation before
+its warmups and fixes that fork's batch count before sampling. When calibration
+is shorter than 100 ms, the batch targets at least 100 ms; otherwise the batch
+is one. Combined with 30 samples across 10 forks, the standard policy targets
+at least 30 seconds of timed work without batching an operation at or above
+100 ms. The runner still verifies the evidence floor from the recorded
+durations and fails closed if timing variation leaves it short.
+
+The court runner launches one fresh worker process per fork and rotates
+implementation position deterministically within each row, boundary, and
+mode. The receipt stores the execution-order seed and schedule digest together
+with every raw duration and its fork and batch membership.
 
 The court may reduce the sample count for a row whose single operation exceeds
 two seconds, but it still requires at least five forks, five samples per fork,

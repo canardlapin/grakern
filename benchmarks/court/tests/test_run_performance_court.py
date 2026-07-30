@@ -345,8 +345,8 @@ import sys
 
 job_path, result_path = sys.argv[1:3]
 job = json.load(open(job_path, encoding="utf-8"))
-duration = 300_000_000
-durations = [duration for _ in range(10)]
+duration = 100_000_000
+durations = [duration for _ in range(30)]
 checksum = "a" * 64
 result = {
     "schema_version": "grakern.performance-worker-result.v1",
@@ -381,7 +381,7 @@ result = {
         "policy": "standard",
         "fork_index": job["execution"]["fork_index"],
         "warmups": 10,
-        "samples": 10,
+        "samples": 30,
         "batch_size": 1,
         "timed_work_ns": sum(durations),
         "durations_ns": durations

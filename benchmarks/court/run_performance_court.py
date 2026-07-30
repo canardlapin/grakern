@@ -831,7 +831,7 @@ def sampling_contract(job: dict[str, Any]) -> dict[str, Any]:
             "policy": "standard",
             "forks": 10,
             "warmups": 10,
-            "samples": 10,
+            "samples": 30,
         }
     return {
         "mode": "warm",
