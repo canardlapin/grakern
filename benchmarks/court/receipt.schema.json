@@ -333,7 +333,10 @@
         "language_version",
         "operating_system",
         "architecture",
-        "environment"
+        "environment",
+        "fingerprint_before",
+        "fingerprint_after",
+        "unchanged"
       ],
       "properties": {
         "language": {
@@ -362,6 +365,15 @@
           "additionalProperties": {
             "type": "string"
           }
+        },
+        "fingerprint_before": {
+          "$ref": "#/$defs/sha256"
+        },
+        "fingerprint_after": {
+          "$ref": "#/$defs/sha256"
+        },
+        "unchanged": {
+          "type": "boolean"
         }
       }
     },
@@ -418,10 +430,10 @@
           "$ref": "#/$defs/positiveInteger"
         },
         "ac_power": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "performance_mode": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "non_court_cpu_percent": {
           "type": "number",
@@ -438,7 +450,7 @@
           "type": "boolean"
         },
         "thermal_or_power_throttling": {
-          "type": "boolean"
+          "type": ["boolean", "null"]
         },
         "other_court_process": {
           "type": "boolean"
@@ -548,7 +560,26 @@
         "finite": {
           "type": "boolean"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "comparison": {
+                "const": "elementwise_tolerance"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "absolute_tolerance",
+              "relative_tolerance",
+              "maximum_absolute_error",
+              "maximum_relative_error"
+            ]
+          }
+        }
+      ]
     },
     "sampling": {
       "type": "object",
@@ -729,8 +760,17 @@
     "artifacts": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["raw_samples", "proof_log", "stdout", "stderr"],
+      "required": [
+        "worker_job",
+        "raw_samples",
+        "proof_log",
+        "stdout",
+        "stderr"
+      ],
       "properties": {
+        "worker_job": {
+          "$ref": "#/$defs/artifact"
+        },
         "raw_samples": {
           "$ref": "#/$defs/artifact"
         },

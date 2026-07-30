@@ -1,0 +1,315 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grakern.dev/schemas/performance-worker-result-v1.json",
+  "title": "Grakern performance worker result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "runtime",
+    "semantic_output",
+    "sampling",
+    "metrics",
+    "proof_checks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "grakern.performance-worker-result.v1"
+    },
+    "job_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runtime": {
+      "$ref": "#/$defs/runtime"
+    },
+    "semantic_output": {
+      "$ref": "#/$defs/semanticOutput"
+    },
+    "sampling": {
+      "$ref": "#/$defs/sampling"
+    },
+    "metrics": {
+      "$ref": "#/$defs/metrics"
+    },
+    "proof_checks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/proofCheck"
+      },
+      "minItems": 1
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "nonNegativeInteger": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "availability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available"],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "value": {
+          "type": "number"
+        },
+        "reason_unavailable": {
+          "type": "string"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "available": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": ["value"]
+          },
+          "else": {
+            "required": ["reason_unavailable"]
+          }
+        }
+      ]
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "language_version",
+        "operating_system",
+        "architecture",
+        "environment"
+      ],
+      "properties": {
+        "language": {
+          "enum": ["scala-jvm", "python", "julia"]
+        },
+        "language_version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vm_version": {
+          "type": "string"
+        },
+        "compiler_version": {
+          "type": "string"
+        },
+        "operating_system": {
+          "type": "string",
+          "minLength": 1
+        },
+        "architecture": {
+          "type": "string",
+          "minLength": 1
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "semanticOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shape",
+        "sample_order_sha256",
+        "comparison",
+        "observed_sha256",
+        "expected_sha256",
+        "finite"
+      ],
+      "properties": {
+        "shape": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "sample_order_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "comparison": {
+          "enum": ["exact_ieee754", "elementwise_tolerance"]
+        },
+        "absolute_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "relative_tolerance": {
+          "type": "number",
+          "minimum": 0
+        },
+        "observed_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "expected_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "maximum_absolute_error": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_relative_error": {
+          "type": "number",
+          "minimum": 0
+        },
+        "finite": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "comparison": {
+                "const": "elementwise_tolerance"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "absolute_tolerance",
+              "relative_tolerance",
+              "maximum_absolute_error",
+              "maximum_relative_error"
+            ]
+          }
+        }
+      ]
+    },
+    "sampling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "policy",
+        "forks",
+        "warmups_per_fork",
+        "samples_per_fork",
+        "batch_size",
+        "timed_work_ns",
+        "execution_order_seed",
+        "durations_ns"
+      ],
+      "properties": {
+        "mode": {
+          "enum": ["cold", "warm"]
+        },
+        "policy": {
+          "enum": ["standard", "expensive_row"]
+        },
+        "forks": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "warmups_per_fork": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "samples_per_fork": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "batch_size": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "timed_work_ns": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "execution_order_seed": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "durations_ns": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/positiveInteger"
+            },
+            "minItems": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wall_clock_median_ns",
+        "cpu_time_ns",
+        "runtime_baseline_rss_bytes",
+        "peak_rss_bytes",
+        "peak_rss_delta_bytes",
+        "allocated_bytes",
+        "gc_count"
+      ],
+      "properties": {
+        "wall_clock_median_ns": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "cpu_time_ns": {
+          "$ref": "#/$defs/availability"
+        },
+        "runtime_baseline_rss_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "peak_rss_bytes": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "peak_rss_delta_bytes": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "allocated_bytes": {
+          "$ref": "#/$defs/availability"
+        },
+        "gc_count": {
+          "$ref": "#/$defs/availability"
+        },
+        "phases": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/nonNegativeInteger"
+          }
+        }
+      }
+    },
+    "proofCheck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "passed", "evidence"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "passed": {
+          "type": "boolean"
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

@@ -141,8 +141,11 @@ fork and batch membership.
 
 The court may reduce the sample count for a row whose single operation exceeds
 two seconds, but it still requires at least five forks, five samples per fork,
-and 30 seconds of timed work. The receipt must record that expensive-row
-policy.
+10 warmup operations per fork, and 30 seconds of timed work. The receipt must
+record that expensive-row policy.
+
+A cold receipt uses exactly 10 independent process forks, one complete
+operation per fork, no warmup, and no inner batching.
 
 ## Source admission
 

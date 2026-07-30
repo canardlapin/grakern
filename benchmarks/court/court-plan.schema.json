@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grakern.dev/schemas/performance-court-plan-v1.json",
+  "title": "Grakern performance court plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "court_id",
+    "coverage_mode",
+    "tier1_manifest",
+    "receipt_schema",
+    "worker_result_schema",
+    "source_components",
+    "host_policy",
+    "classification_policy",
+    "jobs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "grakern.performance-court-plan.v1"
+    },
+    "court_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "coverage_mode": {
+      "enum": ["championship", "diagnostic_subset"]
+    },
+    "tier1_manifest": {
+      "type": "string",
+      "minLength": 1
+    },
+    "receipt_schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "worker_result_schema": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runner_files": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "source_components": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceComponent"
+      },
+      "minItems": 1
+    },
+    "host_policy": {
+      "$ref": "#/$defs/hostPolicy"
+    },
+    "classification_policy": {
+      "$ref": "#/$defs/classificationPolicy"
+    },
+    "jobs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/job"
+      },
+      "minItems": 1
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "coverage_mode": {
+            "const": "championship"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "host_policy": {
+            "properties": {
+              "probe_seconds": {
+                "minimum": 30
+              },
+              "maximum_non_court_cpu_percent": {
+                "maximum": 5
+              },
+              "minimum_free_memory_bytes": {
+                "minimum": 2147483648
+              },
+              "maximum_calibration_cv": {
+                "maximum": 0.02
+              },
+              "maximum_calibration_drift": {
+                "maximum": 0.02
+              },
+              "require_ac_power": {
+                "const": true
+              },
+              "require_performance_mode": {
+                "const": true
+              },
+              "require_thermal_probe": {
+                "const": true
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "positiveInteger": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sourceComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "path", "lock_files"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]*$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "lock_files": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        }
+      }
+    },
+    "hostPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe_seconds",
+        "maximum_non_court_cpu_percent",
+        "minimum_free_memory_bytes",
+        "maximum_calibration_cv",
+        "maximum_calibration_drift",
+        "calibration_samples",
+        "require_ac_power",
+        "require_performance_mode",
+        "require_thermal_probe"
+      ],
+      "properties": {
+        "probe_seconds": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "maximum_non_court_cpu_percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "minimum_free_memory_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "maximum_calibration_cv": {
+          "type": "number",
+          "minimum": 0
+        },
+        "maximum_calibration_drift": {
+          "type": "number",
+          "minimum": 0
+        },
+        "calibration_samples": {
+          "type": "integer",
+          "minimum": 3
+        },
+        "require_ac_power": {
+          "type": "boolean"
+        },
+        "require_performance_mode": {
+          "type": "boolean"
+        },
+        "require_thermal_probe": {
+          "type": "boolean"
+        }
+      }
+    },
+    "classificationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bootstrap_seed",
+        "bootstrap_resamples",
+        "confidence_level",
+        "win_median_ratio",
+        "win_confidence_upper",
+        "loss_median_ratio",
+        "memory_ratio",
+        "memory_absolute_bytes"
+      ],
+      "properties": {
+        "bootstrap_seed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "bootstrap_resamples": {
+          "type": "integer",
+          "minimum": 20000
+        },
+        "confidence_level": {
+          "const": 0.99
+        },
+        "win_median_ratio": {
+          "const": 0.9
+        },
+        "win_confidence_upper": {
+          "const": 0.95
+        },
+        "loss_median_ratio": {
+          "const": 1.0
+        },
+        "memory_ratio": {
+          "const": 1.1
+        },
+        "memory_absolute_bytes": {
+          "const": 67108864
+        }
+      }
+    },
+    "job": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "tier1_id",
+        "boundary",
+        "mode",
+        "implementation",
+        "language",
+        "version",
+        "entrypoint",
+        "comparator_role",
+        "command",
+        "version_command",
+        "timeout_seconds",
+        "application_threads",
+        "blas_threads"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "tier1_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "boundary": {
+          "enum": ["public_end_to_end", "prepared_topology"]
+        },
+        "mode": {
+          "enum": ["cold", "warm"]
+        },
+        "implementation": {
+          "enum": ["grakern", "grakel", "graphkernels_jl"]
+        },
+        "language": {
+          "enum": ["scala-jvm", "python", "julia"]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "entrypoint": {
+          "type": "string",
+          "minLength": 1
+        },
+        "comparator_role": {
+          "enum": ["candidate", "external_comparator"]
+        },
+        "semantic_translation": {
+          "type": "string"
+        },
+        "command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "version_command": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "minItems": 1
+        },
+        "working_directory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timeout_seconds": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "application_threads": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "blas_threads": {
+          "$ref": "#/$defs/positiveInteger"
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

@@ -120,28 +120,32 @@
       "rounds": 5,
       "node_labels": "categorical",
       "edge_labels": "constant",
-      "normalized": false
+      "normalized": false,
+      "output_kind": "gram"
     },
     "wl-oa-r5": {
       "kernel": "wl_optimal_assignment",
       "rounds": 5,
       "node_labels": "categorical",
       "edge_labels": "constant",
-      "normalized": false
+      "normalized": false,
+      "output_kind": "gram"
     },
     "shortest-path-unlabeled": {
       "kernel": "categorical_shortest_path",
       "distance": "unit_hops",
       "node_labels": "constant",
       "pair_identity": "unordered_off_diagonal_reachable",
-      "normalized": false
+      "normalized": false,
+      "output_kind": "gram"
     },
     "wl-subtree-cross-r5": {
       "kernel": "wl_subtree_cross",
       "rounds": 5,
       "node_labels": "categorical",
       "edge_labels": "constant",
-      "normalized": false
+      "normalized": false,
+      "output_kind": "cross"
     }
   },
   "rows": [
