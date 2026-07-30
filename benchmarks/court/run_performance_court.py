@@ -732,6 +732,10 @@ def validate_plan_references(
                 f"job {job['id']} has language {job['language']}; "
                 f"expected {expected_language}"
             )
+        if job["mode"] == "cold" and job["sampling_policy"] != "standard":
+            raise CourtError(
+                f"cold job {job['id']} must use the standard sampling policy"
+            )
         if plan["coverage_mode"] == "championship":
             thread_policy = tier1["thread_policy"]
             if (
@@ -787,6 +791,97 @@ def validate_plan_references(
             raise CourtError(
                 f"championship plan misses {len(missing)} jobs: {rendered}"
             )
+    for group, jobs in race_groups(plan).items():
+        policies = {job["sampling_policy"] for job in jobs}
+        if len(policies) != 1:
+            raise CourtError(
+                "race group has inconsistent sampling policies: " + "/".join(group)
+            )
+
+
+def race_group_key(job: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        job["tier1_id"],
+        job["boundary"],
+        job["mode"],
+    )
+
+
+def race_groups(
+    plan: dict[str, Any],
+) -> dict[tuple[str, str, str], list[dict[str, Any]]]:
+    groups: dict[tuple[str, str, str], list[dict[str, Any]]] = {}
+    for job in plan["jobs"]:
+        groups.setdefault(race_group_key(job), []).append(job)
+    return groups
+
+
+def sampling_contract(job: dict[str, Any]) -> dict[str, Any]:
+    if job["mode"] == "cold":
+        return {
+            "mode": "cold",
+            "policy": "standard",
+            "forks": 10,
+            "warmups": 0,
+            "samples": 1,
+        }
+    if job["sampling_policy"] == "standard":
+        return {
+            "mode": "warm",
+            "policy": "standard",
+            "forks": 10,
+            "warmups": 10,
+            "samples": 10,
+        }
+    return {
+        "mode": "warm",
+        "policy": "expensive_row",
+        "forks": 5,
+        "warmups": 10,
+        "samples": 5,
+    }
+
+
+def rotating_schedule(
+    jobs: Sequence[dict[str, Any]],
+    group: tuple[str, str, str],
+    seed: int,
+) -> list[list[dict[str, Any]]]:
+    if not jobs:
+        raise CourtError("cannot schedule an empty race group")
+    contracts = [sampling_contract(job) for job in jobs]
+    if any(contract != contracts[0] for contract in contracts[1:]):
+        raise CourtError(
+            "race group has incompatible sampling contracts: " + "/".join(group)
+        )
+    seed_material = canonical_json_bytes(
+        {
+            "seed": seed,
+            "group": list(group),
+            "implementations": sorted(job["implementation"] for job in jobs),
+        }
+    )
+    group_seed = int.from_bytes(
+        hashlib.sha256(seed_material).digest()[:8],
+        "big",
+    )
+    base = list(jobs)
+    random.Random(group_seed).shuffle(base)
+    return [
+        base[offset:] + base[:offset]
+        for fork_index in range(contracts[0]["forks"])
+        for offset in [fork_index % len(base)]
+    ]
+
+
+def schedule_sha256(
+    schedule: Sequence[Sequence[dict[str, Any]]],
+) -> str:
+    return sha256_bytes(
+        canonical_json_bytes(
+            [[job["implementation"] for job in fork] for fork in schedule]
+        )
+    )
 
 
 def load_contract(
@@ -880,7 +975,7 @@ def run_worker(
     job_directory: Path,
     payload: dict[str, Any],
     plan_directory: Path,
-) -> tuple[dict[str, Any], dict[str, Path], int]:
+) -> tuple[dict[str, Any], dict[str, Path], int, dict[str, int]]:
     job_directory.mkdir(parents=True, exist_ok=True)
     job_json = job_directory / "job.json"
     worker_result_json = job_directory / "worker-result.json"
@@ -908,6 +1003,7 @@ def run_worker(
         else plan_directory
     )
     peak_rss = 0
+    started_monotonic_ns = time.monotonic_ns()
     with stdout_path.open("wb") as stdout, stderr_path.open("wb") as stderr:
         process = subprocess.Popen(
             command,
@@ -916,6 +1012,7 @@ def run_worker(
             stdout=stdout,
             stderr=stderr,
         )
+        process_id = process.pid
         observed = psutil.Process(process.pid)
         deadline = time.monotonic() + job["timeout_seconds"]
         while process.poll() is None:
@@ -933,6 +1030,7 @@ def run_worker(
             time.sleep(0.01)
         peak_rss = max(peak_rss, process_rss_bytes(observed))
         return_code = process.returncode
+    finished_monotonic_ns = time.monotonic_ns()
     if return_code != 0:
         raise CourtError(
             f"job {job['id']} failed with exit code {return_code}; see {stderr_path}"
@@ -948,6 +1046,11 @@ def run_worker(
             "stderr": stderr_path,
         },
         peak_rss,
+        {
+            "pid": process_id,
+            "started_monotonic_ns": started_monotonic_ns,
+            "finished_monotonic_ns": finished_monotonic_ns,
+        },
     )
 
 
@@ -984,9 +1087,10 @@ def runtime_fingerprint(
     return sha256_bytes(payload), evidence
 
 
-def validate_worker_contract(
+def validate_worker_invocation(
     job: dict[str, Any],
     worker: dict[str, Any],
+    fork_index: int,
 ) -> None:
     runtime = worker["runtime"]
     sampling = worker["sampling"]
@@ -996,7 +1100,6 @@ def validate_worker_contract(
         raise CourtError(f"worker proof check ids are not unique for {job['id']}")
     required_proofs = {
         "semantic.independent_reference",
-        "sampling.independent_process_forks",
         "operation.state_reset",
         "boundary.complete",
     }
@@ -1037,24 +1140,30 @@ def validate_worker_contract(
         raise CourtError(
             f"worker mode mismatch for {job['id']}: {sampling['mode']} != {job['mode']}"
         )
-    if len(sampling["durations_ns"]) != sampling["forks"]:
-        raise CourtError(f"worker fork count mismatch for {job['id']}")
-    if any(
-        len(fork) != sampling["samples_per_fork"] for fork in sampling["durations_ns"]
-    ):
+    contract = sampling_contract(job)
+    expected_sampling = {
+        "policy": contract["policy"],
+        "fork_index": fork_index,
+        "warmups": contract["warmups"],
+        "samples": contract["samples"],
+    }
+    for field, expected in expected_sampling.items():
+        if sampling[field] != expected:
+            raise CourtError(
+                f"worker {field} mismatch for {job['id']} fork "
+                f"{fork_index}: {sampling[field]!r} != {expected!r}"
+            )
+    if len(sampling["durations_ns"]) != sampling["samples"]:
         raise CourtError(f"worker sample count mismatch for {job['id']}")
-    timed_work = sum(duration for fork in sampling["durations_ns"] for duration in fork)
+    timed_work = sum(sampling["durations_ns"])
     if timed_work != sampling["timed_work_ns"]:
         raise CourtError(
             f"worker timed-work mismatch for {job['id']}: "
             f"{timed_work} != {sampling['timed_work_ns']}"
         )
-    medians = flattened(
-        [
-            [duration / sampling["batch_size"] for duration in fork]
-            for fork in sampling["durations_ns"]
-        ]
-    )
+    medians = [
+        duration / sampling["batch_size"] for duration in sampling["durations_ns"]
+    ]
     expected_median = round(statistics.median(medians))
     if metrics["wall_clock_median_ns"] != expected_median:
         raise CourtError(
@@ -1065,40 +1174,343 @@ def validate_worker_contract(
         raise CourtError(
             f"worker batched an operation at or above 100 ms for {job['id']}"
         )
-    if sampling["mode"] == "warm":
-        if sampling["policy"] == "standard":
-            minima = {
-                "forks": 10,
-                "warmups_per_fork": 10,
-                "samples_per_fork": 10,
-            }
-        else:
-            minima = {
-                "forks": 5,
-                "warmups_per_fork": 10,
-                "samples_per_fork": 5,
-            }
-        for field, minimum in minima.items():
-            if sampling[field] < minimum:
-                raise CourtError(
-                    f"worker {field} below policy for {job['id']}: "
-                    f"{sampling[field]} < {minimum}"
-                )
-        if timed_work < 30_000_000_000:
-            raise CourtError(f"worker timed work below 30 seconds for {job['id']}")
-    else:
-        expected = {
-            "forks": 10,
-            "warmups_per_fork": 0,
-            "samples_per_fork": 1,
-            "batch_size": 1,
+    if sampling["mode"] == "cold" and sampling["batch_size"] != 1:
+        raise CourtError(f"worker cold batch_size must equal 1 for {job['id']}")
+
+
+def aggregate_availability(
+    values: Sequence[dict[str, Any]],
+) -> dict[str, Any]:
+    if all(value["available"] for value in values):
+        return {
+            "available": True,
+            "value": statistics.median(value["value"] for value in values),
         }
-        for field, value in expected.items():
-            if sampling[field] != value:
-                raise CourtError(
-                    f"worker cold {field} must equal {value} for {job['id']}: "
-                    f"{sampling[field]}"
+    reasons = sorted(
+        {
+            value.get("reason_unavailable", "unavailable")
+            for value in values
+            if not value["available"]
+        }
+    )
+    return {
+        "available": False,
+        "reason_unavailable": "; ".join(reasons),
+    }
+
+
+def aggregate_workers(
+    job: dict[str, Any],
+    invocations: Sequence[dict[str, Any]],
+    execution_order_seed: int,
+    execution_order_sha256: str,
+) -> tuple[dict[str, Any], int]:
+    contract = sampling_contract(job)
+    if len(invocations) != contract["forks"]:
+        raise CourtError(
+            f"job {job['id']} has {len(invocations)} completed forks; "
+            f"expected {contract['forks']}"
+        )
+    ordered = sorted(
+        invocations,
+        key=lambda invocation: invocation["fork_index"],
+    )
+    expected_indices = list(range(contract["forks"]))
+    observed_indices = [invocation["fork_index"] for invocation in ordered]
+    if observed_indices != expected_indices:
+        raise CourtError(f"job {job['id']} fork indices are incomplete or duplicated")
+    workers = [invocation["worker"] for invocation in ordered]
+    runtimes = [worker["runtime"] for worker in workers]
+    if any(runtime != runtimes[0] for runtime in runtimes[1:]):
+        raise CourtError(
+            f"worker runtime metadata changed across forks for {job['id']}"
+        )
+    semantics = [worker["semantic_output"] for worker in workers]
+    semantic_identity_fields = (
+        "shape",
+        "sample_order_sha256",
+        "comparison",
+        "observed_sha256",
+        "expected_sha256",
+        "finite",
+        "absolute_tolerance",
+        "relative_tolerance",
+    )
+    semantic_identity = {
+        field: semantics[0].get(field) for field in semantic_identity_fields
+    }
+    if any(
+        {field: semantic.get(field) for field in semantic_identity_fields}
+        != semantic_identity
+        for semantic in semantics[1:]
+    ):
+        raise CourtError(f"semantic output changed across forks for {job['id']}")
+    semantic = dict(semantics[0])
+    for field in (
+        "maximum_absolute_error",
+        "maximum_relative_error",
+    ):
+        observed = [value[field] for value in semantics if field in value]
+        if observed:
+            semantic[field] = max(observed)
+    sampling_values = [worker["sampling"] for worker in workers]
+    batch_sizes = {sampling["batch_size"] for sampling in sampling_values}
+    if len(batch_sizes) != 1:
+        raise CourtError(f"batch size changed across forks for {job['id']}")
+    batch_size = next(iter(batch_sizes))
+    if contract["mode"] == "cold":
+        durations = [
+            [
+                invocation["process"]["finished_monotonic_ns"]
+                - invocation["process"]["started_monotonic_ns"]
+            ]
+            for invocation in ordered
+        ]
+    else:
+        durations = [sampling["durations_ns"] for sampling in sampling_values]
+    timed_work = sum(duration for fork in durations for duration in fork)
+    if contract["mode"] == "warm" and timed_work < 30_000_000_000:
+        raise CourtError(f"worker timed work below 30 seconds for {job['id']}")
+    per_operation = [duration / batch_size for fork in durations for duration in fork]
+    metrics_values = [worker["metrics"] for worker in workers]
+    phase_names = set(metrics_values[0]["phases"])
+    if any(set(metrics["phases"]) != phase_names for metrics in metrics_values):
+        raise CourtError(f"phase names changed across forks for {job['id']}")
+    baseline_rss = min(
+        int(metrics["runtime_baseline_rss_bytes"]) for metrics in metrics_values
+    )
+    peak_rss = max(
+        max(
+            int(invocation["peak_rss"]),
+            int(invocation["worker"]["metrics"]["peak_rss_bytes"]),
+        )
+        for invocation in ordered
+    )
+    peak_delta = max(
+        max(
+            int(invocation["worker"]["metrics"]["peak_rss_delta_bytes"]),
+            max(
+                0,
+                max(
+                    int(invocation["peak_rss"]),
+                    int(invocation["worker"]["metrics"]["peak_rss_bytes"]),
                 )
+                - int(invocation["worker"]["metrics"]["runtime_baseline_rss_bytes"]),
+            ),
+        )
+        for invocation in ordered
+    )
+    proof_ids = {check["id"] for check in workers[0]["proof_checks"]}
+    if any(
+        {check["id"] for check in worker["proof_checks"]} != proof_ids
+        for worker in workers[1:]
+    ):
+        raise CourtError(f"proof check ids changed across forks for {job['id']}")
+    proof_checks = []
+    for proof_id in sorted(proof_ids):
+        checks = [
+            next(check for check in worker["proof_checks"] if check["id"] == proof_id)
+            for worker in workers
+        ]
+        proof_checks.append(
+            {
+                "id": proof_id,
+                "passed": all(check["passed"] for check in checks),
+                "evidence": (
+                    f"{len(checks)} fork checks; evidence_sha256="
+                    + sha256_bytes(canonical_json_bytes(checks))
+                ),
+            }
+        )
+    process_evidence = [
+        {
+            "fork_index": invocation["fork_index"],
+            **invocation["process"],
+        }
+        for invocation in ordered
+    ]
+    proof_checks.append(
+        {
+            "id": "sampling.independent_process_forks",
+            "passed": True,
+            "evidence": (
+                f"runner launched {len(process_evidence)} sequential "
+                "worker processes; evidence_sha256="
+                + sha256_bytes(canonical_json_bytes(process_evidence))
+            ),
+        }
+    )
+    if contract["mode"] == "cold":
+        proof_checks.append(
+            {
+                "id": "sampling.cold_process_boundary",
+                "passed": True,
+                "evidence": (
+                    "receipt durations use runner-observed process launch "
+                    "through successful worker exit"
+                ),
+            }
+        )
+    return (
+        {
+            "runtime": runtimes[0],
+            "semantic_output": semantic,
+            "sampling": {
+                "mode": contract["mode"],
+                "policy": contract["policy"],
+                "forks": contract["forks"],
+                "warmups_per_fork": contract["warmups"],
+                "samples_per_fork": contract["samples"],
+                "batch_size": batch_size,
+                "timed_work_ns": timed_work,
+                "execution_order_seed": execution_order_seed,
+                "execution_order_sha256": execution_order_sha256,
+                "durations_ns": durations,
+            },
+            "metrics": {
+                "wall_clock_median_ns": round(statistics.median(per_operation)),
+                "cpu_time_ns": aggregate_availability(
+                    [metrics["cpu_time_ns"] for metrics in metrics_values]
+                ),
+                "runtime_baseline_rss_bytes": baseline_rss,
+                "peak_rss_bytes": peak_rss,
+                "peak_rss_delta_bytes": peak_delta,
+                "allocated_bytes": aggregate_availability(
+                    [metrics["allocated_bytes"] for metrics in metrics_values]
+                ),
+                "gc_count": aggregate_availability(
+                    [metrics["gc_count"] for metrics in metrics_values]
+                ),
+                "phases": {
+                    name: round(
+                        statistics.median(
+                            metrics["phases"][name] for metrics in metrics_values
+                        )
+                    )
+                    for name in sorted(phase_names)
+                },
+            },
+            "proof_checks": proof_checks,
+        },
+        peak_rss,
+    )
+
+
+def aggregate_host_evidence(
+    invocations: Sequence[dict[str, Any]],
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    hosts = [invocation["host"] for invocation in invocations]
+    first = hosts[0]
+    last = hosts[-1]
+    host = {
+        **first,
+        "ac_power": (
+            True if all(candidate["ac_power"] is True for candidate in hosts) else None
+        ),
+        "performance_mode": (
+            True
+            if all(candidate["performance_mode"] is True for candidate in hosts)
+            else None
+        ),
+        "non_court_cpu_percent": max(
+            candidate["non_court_cpu_percent"] for candidate in hosts
+        ),
+        "free_memory_bytes": min(candidate["free_memory_bytes"] for candidate in hosts),
+        "swap_growth_bytes": sum(candidate["swap_growth_bytes"] for candidate in hosts),
+        "memory_pressure": any(candidate["memory_pressure"] for candidate in hosts),
+        "thermal_or_power_throttling": (
+            None
+            if any(
+                candidate["thermal_or_power_throttling"] is None for candidate in hosts
+            )
+            else any(candidate["thermal_or_power_throttling"] for candidate in hosts)
+        ),
+        "calibration_before": first["calibration_before"],
+        "calibration_after": last["calibration_after"],
+        "_evidence": {
+            "invocation_host_sha256": sha256_bytes(
+                canonical_json_bytes([public_host(candidate) for candidate in hosts])
+            )
+        },
+    }
+    checks: list[dict[str, Any]] = []
+    for invocation, candidate in zip(invocations, hosts, strict=True):
+        for check in host_checks(
+            candidate,
+            invocation["host_policy"],
+        ):
+            checks.append(
+                {
+                    **check,
+                    "id": (f"{check['id']}.fork-{invocation['fork_index']:03d}"),
+                }
+            )
+    return host, checks
+
+
+def aggregate_worker_artifacts(
+    job: dict[str, Any],
+    job_directory: Path,
+    invocations: Sequence[dict[str, Any]],
+    worker: dict[str, Any],
+) -> dict[str, Path]:
+    aggregate_directory = job_directory / "aggregate"
+    aggregate_directory.mkdir(parents=True, exist_ok=True)
+    job_json = aggregate_directory / "job.json"
+    worker_result_json = aggregate_directory / "worker-result.json"
+    stdout_path = aggregate_directory / "stdout.log"
+    stderr_path = aggregate_directory / "stderr.log"
+    observed_order_sha256 = sha256_bytes(
+        canonical_json_bytes([invocation["order"] for invocation in invocations])
+    )
+    if observed_order_sha256 != worker["sampling"]["execution_order_sha256"]:
+        raise CourtError(f"execution order artifact mismatch for {job['id']}")
+    manifest = {
+        "schema_version": "grakern.performance-invocation-manifest.v1",
+        "job_id": job["id"],
+        "execution_order_seed": worker["sampling"]["execution_order_seed"],
+        "execution_order_sha256": worker["sampling"]["execution_order_sha256"],
+        "invocations": [
+            {
+                "fork_index": invocation["fork_index"],
+                "position": invocation["position"],
+                "order": invocation["order"],
+                "process": invocation["process"],
+                "artifacts": {
+                    name: {
+                        "path": os.path.relpath(
+                            path,
+                            aggregate_directory,
+                        ),
+                        "sha256": sha256_file(path),
+                    }
+                    for name, path in invocation["paths"].items()
+                },
+            }
+            for invocation in invocations
+        ],
+    }
+    write_json(job_json, manifest)
+    write_json(worker_result_json, worker)
+    for destination, name in (
+        (stdout_path, "stdout"),
+        (stderr_path, "stderr"),
+    ):
+        with destination.open("wb") as output:
+            for invocation in invocations:
+                header = (
+                    f"===== fork {invocation['fork_index']:03d} "
+                    f"position {invocation['position']} =====\n"
+                ).encode()
+                output.write(header)
+                output.write(invocation["paths"][name].read_bytes())
+                output.write(b"\n")
+    return {
+        "job_json": job_json,
+        "worker_result": worker_result_json,
+        "stdout": stdout_path,
+        "stderr": stderr_path,
+    }
 
 
 def artifact(path: Path, output_root: Path, media_type: str) -> dict[str, str]:
@@ -1137,6 +1549,24 @@ def verify_draft_artifacts(
             output_root,
             f"{draft['receipt_id']}:{name}",
         )
+    manifest_path = (output_root / draft["artifacts"]["worker_job"]["path"]).resolve()
+    manifest = read_json(manifest_path)
+    if manifest.get("schema_version") != "grakern.performance-invocation-manifest.v1":
+        raise CourtError(f"{draft['receipt_id']} has an invalid invocation manifest")
+    for invocation in manifest["invocations"]:
+        for name, descriptor in invocation["artifacts"].items():
+            path = (manifest_path.parent / descriptor["path"]).resolve()
+            label = f"{draft['receipt_id']}:fork-{invocation['fork_index']:03d}:{name}"
+            if not path.is_relative_to(output_root):
+                raise CourtError(f"{label} artifact escapes output root: {path}")
+            if not path.is_file():
+                raise CourtError(f"{label} artifact is missing: {path}")
+            observed = sha256_file(path)
+            if observed != descriptor["sha256"]:
+                raise CourtError(
+                    f"{label} artifact drift: "
+                    f"expected={descriptor['sha256']} observed={observed}"
+                )
 
 
 def corpus_sha256(
@@ -1166,10 +1596,13 @@ def build_receipt_draft(
     runner_digest: str,
     runtime_before: tuple[str, str],
     runtime_after: tuple[str, str],
+    invocation_checks: dict[str, list[dict[str, Any]]],
 ) -> dict[str, Any]:
     row = find_tier1_row(tier1, job["tier1_id"])
-    source_evidence = source_checks(source_before, source_after)
-    host_evidence = host_checks(host, plan["host_policy"])
+    source_evidence = (
+        source_checks(source_before, source_after) + invocation_checks["source"]
+    )
+    host_evidence = invocation_checks["host"]
     worker_checks = worker["proof_checks"]
     semantic = worker["semantic_output"]
     expected_output = row["expected_output"]
@@ -1260,7 +1693,7 @@ def build_receipt_draft(
                 f"after_version={runtime_after[1]!r}"
             ),
         }
-    ]
+    ] + invocation_checks["runtime"]
     source_admitted = checks_pass(source_evidence + runtime_checks)
     host_admitted = checks_pass(host_evidence)
     semantic_admitted = checks_pass(worker_checks + semantic_checks)
@@ -1617,12 +2050,22 @@ def worker_payload(
     tier1: dict[str, Any],
     job: dict[str, Any],
     paths: dict[str, Path],
+    fork_index: int,
+    position: int,
+    order: Sequence[str],
 ) -> dict[str, Any]:
     row = find_tier1_row(tier1, job["tier1_id"])
     return {
         "schema_version": "grakern.performance-worker-job.v1",
         "court_id": plan["court_id"],
         "job": job,
+        "execution": {
+            "fork_index": fork_index,
+            "position": position,
+            "order": list(order),
+            "order_seed": plan["execution_order_seed"],
+        },
+        "sampling_contract": sampling_contract(job),
         "tier1_row": row,
         "kernel_configuration": tier1["kernel_configurations"][row["kernel"]],
         "corpus": tier1["corpora"][row["corpus"]],
@@ -1736,90 +2179,254 @@ def run_court(
             )
 
         drafts: list[dict[str, Any]] = []
-        for job in plan["jobs"]:
-            completed = state["completed_jobs"].get(job["id"])
-            if completed is not None:
-                drafts.append(read_json(output_root / completed["draft_path"]))
+        for group, jobs in race_groups(plan).items():
+            completed = [state["completed_jobs"].get(job["id"]) for job in jobs]
+            if all(record is not None for record in completed):
+                drafts.extend(
+                    read_json(output_root / record["draft_path"])
+                    for record in completed
+                    if record is not None
+                )
                 continue
-            before_host = host_snapshot(plan["host_policy"])
-            before_sources = snapshot_sources(plan, plan_path.parent)
-            before_runtime = runtime_fingerprint(
-                job,
-                plan_path.parent,
-            )
-            if not diagnostic:
-                quick_host = combine_host_snapshots(
-                    before_host,
-                    before_host,
-                )
-                checks = source_checks(source_before, before_sources)
-                checks += host_checks(quick_host, plan["host_policy"])
-                if not checks_pass(checks):
-                    state["status"] = "blocked_before_job"
-                    state["blocked_job"] = job["id"]
-                    state["failed_checks"] = [
-                        check for check in checks if not check["passed"]
-                    ]
-                    write_json(state_path(output_root), state)
-                    raise CourtError(f"admission changed before job {job['id']}")
-
-            job_directory = output_root / "jobs" / job["id"]
-            worker, worker_paths, peak_rss = run_worker(
-                job,
-                job_directory,
-                worker_payload(plan, tier1, job, paths),
-                plan_path.parent,
-            )
-            validate(
-                worker,
-                paths["worker_result_schema"],
-                f"worker result {job['id']}",
-            )
-            if worker["job_id"] != job["id"]:
+            if any(record is not None for record in completed):
                 raise CourtError(
-                    f"worker job id mismatch: {worker['job_id']} != {job['id']}"
+                    "race group has a partial completed checkpoint: " + "/".join(group)
                 )
-            validate_worker_contract(job, worker)
-            after_sources = snapshot_sources(plan, plan_path.parent)
-            after_runtime = runtime_fingerprint(
-                job,
-                plan_path.parent,
+            schedule = rotating_schedule(
+                jobs,
+                group,
+                plan["execution_order_seed"],
             )
-            after_host = host_snapshot(plan["host_policy"])
-            host = combine_host_snapshots(before_host, after_host)
-            draft = build_receipt_draft(
-                plan,
-                tier1,
-                paths,
-                job,
-                worker,
-                worker_paths,
-                peak_rss,
-                before_sources,
-                after_sources,
-                host,
-                diagnostic,
-                output_root,
-                runner_digest,
-                before_runtime,
-                after_runtime,
-            )
-            draft_path = job_directory / "receipt-draft.json"
-            write_json(draft_path, draft)
-            state["completed_jobs"][job["id"]] = {
-                "draft_path": os.path.relpath(draft_path, output_root),
-                "sha256": sha256_file(draft_path),
-                "status": draft["status"],
+            order_digest = schedule_sha256(schedule)
+            invocations_by_job: dict[str, list[dict[str, Any]]] = {
+                job["id"]: [] for job in jobs
             }
-            write_json(state_path(output_root), state)
-            drafts.append(draft)
-            if not diagnostic and draft["status"] != "admitted":
-                state["status"] = draft["status"]
-                state["blocked_job"] = job["id"]
-                write_json(state_path(output_root), state)
-                raise CourtError(
-                    f"job {job['id']} is not admissible: {draft['status']}"
+            for fork_index, ordered_jobs in enumerate(schedule):
+                order = [candidate["implementation"] for candidate in ordered_jobs]
+                for position, job in enumerate(ordered_jobs):
+                    before_host = host_snapshot(plan["host_policy"])
+                    before_sources = snapshot_sources(
+                        plan,
+                        plan_path.parent,
+                    )
+                    before_runtime = runtime_fingerprint(
+                        job,
+                        plan_path.parent,
+                    )
+                    quick_host = combine_host_snapshots(
+                        before_host,
+                        before_host,
+                    )
+                    before_checks = source_checks(
+                        source_before,
+                        before_sources,
+                    )
+                    before_checks += host_checks(
+                        quick_host,
+                        plan["host_policy"],
+                    )
+                    if not diagnostic and not checks_pass(before_checks):
+                        state["status"] = "blocked_before_fork"
+                        state["blocked_job"] = job["id"]
+                        state["blocked_fork"] = fork_index
+                        state["failed_checks"] = [
+                            check for check in before_checks if not check["passed"]
+                        ]
+                        write_json(state_path(output_root), state)
+                        raise CourtError(
+                            f"admission changed before {job['id']} fork {fork_index}"
+                        )
+
+                    invocation_directory = (
+                        output_root
+                        / "jobs"
+                        / job["id"]
+                        / "invocations"
+                        / f"fork-{fork_index:03d}"
+                    )
+                    worker, worker_paths, peak_rss, process = run_worker(
+                        job,
+                        invocation_directory,
+                        worker_payload(
+                            plan,
+                            tier1,
+                            job,
+                            paths,
+                            fork_index,
+                            position,
+                            order,
+                        ),
+                        plan_path.parent,
+                    )
+                    validate(
+                        worker,
+                        paths["worker_result_schema"],
+                        (f"worker result {job['id']} fork {fork_index}"),
+                    )
+                    if worker["job_id"] != job["id"]:
+                        raise CourtError(
+                            f"worker job id mismatch: {worker['job_id']} != {job['id']}"
+                        )
+                    validate_worker_invocation(
+                        job,
+                        worker,
+                        fork_index,
+                    )
+                    after_sources = snapshot_sources(
+                        plan,
+                        plan_path.parent,
+                    )
+                    after_runtime = runtime_fingerprint(
+                        job,
+                        plan_path.parent,
+                    )
+                    after_host = host_snapshot(plan["host_policy"])
+                    host = combine_host_snapshots(
+                        before_host,
+                        after_host,
+                    )
+                    suffix = f"fork-{fork_index:03d}"
+                    invocation_source_checks = [
+                        {
+                            **check,
+                            "id": f"{check['id']}.{suffix}",
+                        }
+                        for check in source_checks(
+                            before_sources,
+                            after_sources,
+                        )
+                    ]
+                    runtime_unchanged = before_runtime[0] == after_runtime[0]
+                    invocation_runtime_checks = [
+                        {
+                            "id": f"runtime.unchanged.{suffix}",
+                            "passed": runtime_unchanged,
+                            "evidence": (
+                                f"before={before_runtime[0]} after={after_runtime[0]}"
+                            ),
+                        }
+                    ]
+                    invocation_host_checks = [
+                        {
+                            **check,
+                            "id": f"{check['id']}.{suffix}",
+                        }
+                        for check in host_checks(
+                            host,
+                            plan["host_policy"],
+                        )
+                    ]
+                    post_checks = (
+                        invocation_source_checks
+                        + invocation_runtime_checks
+                        + invocation_host_checks
+                    )
+                    if not diagnostic and not checks_pass(post_checks):
+                        state["status"] = "blocked_after_fork"
+                        state["blocked_job"] = job["id"]
+                        state["blocked_fork"] = fork_index
+                        state["failed_checks"] = [
+                            check for check in post_checks if not check["passed"]
+                        ]
+                        write_json(state_path(output_root), state)
+                        raise CourtError(
+                            f"admission changed after {job['id']} fork {fork_index}"
+                        )
+                    invocations_by_job[job["id"]].append(
+                        {
+                            "fork_index": fork_index,
+                            "position": position,
+                            "order": order,
+                            "worker": worker,
+                            "paths": worker_paths,
+                            "peak_rss": peak_rss,
+                            "process": process,
+                            "source_before": before_sources,
+                            "source_after": after_sources,
+                            "runtime_before": before_runtime,
+                            "runtime_after": after_runtime,
+                            "host": host,
+                            "host_policy": plan["host_policy"],
+                            "source_checks": invocation_source_checks,
+                            "runtime_checks": invocation_runtime_checks,
+                            "host_checks": invocation_host_checks,
+                        }
+                    )
+
+            group_drafts: list[tuple[dict[str, Any], Path]] = []
+            for job in jobs:
+                invocations = invocations_by_job[job["id"]]
+                worker, peak_rss = aggregate_workers(
+                    job,
+                    invocations,
+                    plan["execution_order_seed"],
+                    order_digest,
                 )
+                worker_paths = aggregate_worker_artifacts(
+                    job,
+                    output_root / "jobs" / job["id"],
+                    invocations,
+                    worker,
+                )
+                host, aggregated_host_checks = aggregate_host_evidence(invocations)
+                invocation_checks = {
+                    "source": [
+                        check
+                        for invocation in invocations
+                        for check in invocation["source_checks"]
+                    ],
+                    "runtime": [
+                        check
+                        for invocation in invocations
+                        for check in invocation["runtime_checks"]
+                    ],
+                    "host": aggregated_host_checks,
+                }
+                draft = build_receipt_draft(
+                    plan,
+                    tier1,
+                    paths,
+                    job,
+                    worker,
+                    worker_paths,
+                    peak_rss,
+                    invocations[0]["source_before"],
+                    invocations[-1]["source_after"],
+                    host,
+                    diagnostic,
+                    output_root,
+                    runner_digest,
+                    invocations[0]["runtime_before"],
+                    invocations[-1]["runtime_after"],
+                    invocation_checks,
+                )
+                draft_path = output_root / "jobs" / job["id"] / "receipt-draft.json"
+                write_json(draft_path, draft)
+                group_drafts.append((draft, draft_path))
+            for draft, draft_path in group_drafts:
+                job_id = draft["implementation"]["id"]
+                matching_job = next(
+                    job for job in jobs if job["implementation"] == job_id
+                )
+                state["completed_jobs"][matching_job["id"]] = {
+                    "draft_path": os.path.relpath(
+                        draft_path,
+                        output_root,
+                    ),
+                    "sha256": sha256_file(draft_path),
+                    "status": draft["status"],
+                }
+                drafts.append(draft)
+            write_json(state_path(output_root), state)
+            if not diagnostic:
+                rejected = [
+                    draft for draft, _ in group_drafts if draft["status"] != "admitted"
+                ]
+                if rejected:
+                    state["status"] = rejected[0]["status"]
+                    state["blocked_job"] = rejected[0]["receipt_id"]
+                    write_json(state_path(output_root), state)
+                    raise CourtError(f"race group {'/'.join(group)} is not admissible")
 
         final_sources = snapshot_sources(plan, plan_path.parent)
         if not sources_equal(source_before, final_sources):

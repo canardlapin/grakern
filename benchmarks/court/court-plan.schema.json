@@ -8,6 +8,7 @@
     "schema_version",
     "court_id",
     "coverage_mode",
+    "execution_order_seed",
     "tier1_manifest",
     "receipt_schema",
     "worker_result_schema",
@@ -26,6 +27,10 @@
     },
     "coverage_mode": {
       "enum": ["championship", "diagnostic_subset"]
+    },
+    "execution_order_seed": {
+      "type": "integer",
+      "minimum": 0
     },
     "tier1_manifest": {
       "type": "string",
@@ -239,6 +244,7 @@
         "tier1_id",
         "boundary",
         "mode",
+        "sampling_policy",
         "implementation",
         "language",
         "version",
@@ -264,6 +270,9 @@
         },
         "mode": {
           "enum": ["cold", "warm"]
+        },
+        "sampling_policy": {
+          "enum": ["standard", "expensive_row"]
         },
         "implementation": {
           "enum": ["grakern", "grakel", "graphkernels_jl"]

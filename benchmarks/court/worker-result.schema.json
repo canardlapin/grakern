@@ -205,12 +205,11 @@
       "required": [
         "mode",
         "policy",
-        "forks",
-        "warmups_per_fork",
-        "samples_per_fork",
+        "fork_index",
+        "warmups",
+        "samples",
         "batch_size",
         "timed_work_ns",
-        "execution_order_seed",
         "durations_ns"
       ],
       "properties": {
@@ -220,13 +219,13 @@
         "policy": {
           "enum": ["standard", "expensive_row"]
         },
-        "forks": {
-          "$ref": "#/$defs/positiveInteger"
-        },
-        "warmups_per_fork": {
+        "fork_index": {
           "$ref": "#/$defs/nonNegativeInteger"
         },
-        "samples_per_fork": {
+        "warmups": {
+          "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "samples": {
           "$ref": "#/$defs/positiveInteger"
         },
         "batch_size": {
@@ -235,17 +234,10 @@
         "timed_work_ns": {
           "$ref": "#/$defs/positiveInteger"
         },
-        "execution_order_seed": {
-          "$ref": "#/$defs/nonNegativeInteger"
-        },
         "durations_ns": {
           "type": "array",
           "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/$defs/positiveInteger"
-            },
-            "minItems": 1
+            "$ref": "#/$defs/positiveInteger"
           },
           "minItems": 1
         }

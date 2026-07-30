@@ -593,6 +593,7 @@
         "batch_size",
         "timed_work_ns",
         "execution_order_seed",
+        "execution_order_sha256",
         "durations_ns"
       ],
       "properties": {
@@ -619,6 +620,9 @@
         },
         "execution_order_seed": {
           "$ref": "#/$defs/nonNegativeInteger"
+        },
+        "execution_order_sha256": {
+          "$ref": "#/$defs/sha256"
         },
         "durations_ns": {
           "type": "array",

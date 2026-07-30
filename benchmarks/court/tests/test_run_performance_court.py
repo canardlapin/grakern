@@ -57,6 +57,91 @@ def timed_receipt(
     }
 
 
+def cold_invocation(
+    job: dict[str, Any],
+    fork_index: int,
+    elapsed_ns: int,
+) -> dict[str, Any]:
+    checksum = "c" * 64
+    worker = {
+        "runtime": {
+            "language": job["language"],
+            "language_version": "fixture",
+            "operating_system": "fixture",
+            "architecture": "fixture",
+            "environment": {
+                "GRAKERN_COURT_APPLICATION_THREADS": "1",
+                "OMP_NUM_THREADS": "1",
+                "OPENBLAS_NUM_THREADS": "1",
+                "MKL_NUM_THREADS": "1",
+                "VECLIB_MAXIMUM_THREADS": "1",
+                "JULIA_NUM_THREADS": "1",
+            },
+        },
+        "semantic_output": {
+            "shape": [1, 1],
+            "sample_order_sha256": checksum,
+            "comparison": "exact_ieee754",
+            "observed_sha256": checksum,
+            "expected_sha256": checksum,
+            "finite": True,
+        },
+        "sampling": {
+            "mode": "cold",
+            "policy": "standard",
+            "fork_index": fork_index,
+            "warmups": 0,
+            "samples": 1,
+            "batch_size": 1,
+            "timed_work_ns": 1,
+            "durations_ns": [1],
+        },
+        "metrics": {
+            "wall_clock_median_ns": 1,
+            "cpu_time_ns": {
+                "available": False,
+                "reason_unavailable": "fixture",
+            },
+            "runtime_baseline_rss_bytes": 1,
+            "peak_rss_bytes": 2,
+            "peak_rss_delta_bytes": 1,
+            "allocated_bytes": {
+                "available": True,
+                "value": 1,
+            },
+            "gc_count": {
+                "available": False,
+                "reason_unavailable": "fixture",
+            },
+            "phases": {
+                "operation": 1,
+            },
+        },
+        "proof_checks": [
+            {
+                "id": identifier,
+                "passed": True,
+                "evidence": "fixture",
+            }
+            for identifier in (
+                "semantic.independent_reference",
+                "operation.state_reset",
+                "boundary.complete",
+            )
+        ],
+    }
+    return {
+        "fork_index": fork_index,
+        "worker": worker,
+        "peak_rss": 2,
+        "process": {
+            "pid": 1000 + fork_index,
+            "started_monotonic_ns": 10_000,
+            "finished_monotonic_ns": 10_000 + elapsed_ns,
+        },
+    }
+
+
 class CourtContractSuite(unittest.TestCase):
     def test_all_schemas_are_valid_draft_2020_12(self) -> None:
         for name in (
@@ -150,6 +235,72 @@ class CourtContractSuite(unittest.TestCase):
             ):
                 self.fail("second court acquired the host lock")
 
+    def test_rotating_schedule_is_deterministic_and_position_balanced(
+        self,
+    ) -> None:
+        jobs = [
+            {
+                "id": implementation,
+                "implementation": implementation,
+                "mode": "warm",
+                "sampling_policy": "standard",
+            }
+            for implementation in (
+                "grakern",
+                "grakel",
+                "graphkernels_jl",
+            )
+        ]
+        group = ("row", "public_end_to_end", "warm")
+        first = court.rotating_schedule(jobs, group, 17)
+        second = court.rotating_schedule(jobs, group, 17)
+
+        self.assertEqual(first, second)
+        self.assertEqual(len(first), 10)
+        expected = {job["implementation"] for job in jobs}
+        positions = {implementation: [0, 0, 0] for implementation in expected}
+        for fork in first:
+            self.assertEqual(
+                {job["implementation"] for job in fork},
+                expected,
+            )
+            for position, job in enumerate(fork):
+                positions[job["implementation"]][position] += 1
+        for counts in positions.values():
+            self.assertLessEqual(max(counts) - min(counts), 1)
+
+    def test_cold_receipt_uses_runner_observed_process_latency(
+        self,
+    ) -> None:
+        job = {
+            "id": "cold-fixture",
+            "implementation": "grakern",
+            "language": "scala-jvm",
+            "mode": "cold",
+            "sampling_policy": "standard",
+            "application_threads": 1,
+            "blas_threads": 1,
+        }
+        elapsed = [100 + fork_index for fork_index in range(10)]
+        worker, _ = court.aggregate_workers(
+            job,
+            [
+                cold_invocation(job, fork_index, duration)
+                for fork_index, duration in enumerate(elapsed)
+            ],
+            execution_order_seed=17,
+            execution_order_sha256="d" * 64,
+        )
+
+        self.assertEqual(
+            worker["sampling"]["durations_ns"],
+            [[duration] for duration in elapsed],
+        )
+        self.assertIn(
+            "sampling.cold_process_boundary",
+            {check["id"] for check in worker["proof_checks"]},
+        )
+
     def test_source_snapshot_detects_content_and_dirty_state(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -195,13 +346,13 @@ import sys
 job_path, result_path = sys.argv[1:3]
 job = json.load(open(job_path, encoding="utf-8"))
 duration = 300_000_000
-durations = [[duration for _ in range(10)] for _ in range(10)]
+durations = [duration for _ in range(10)]
 checksum = "a" * 64
 result = {
     "schema_version": "grakern.performance-worker-result.v1",
     "job_id": job["job"]["id"],
     "runtime": {
-        "language": "scala-jvm",
+        "language": job["job"]["language"],
         "language_version": platform.python_version(),
         "operating_system": platform.platform(),
         "architecture": platform.machine(),
@@ -228,12 +379,11 @@ result = {
     "sampling": {
         "mode": "warm",
         "policy": "standard",
-        "forks": 10,
-        "warmups_per_fork": 10,
-        "samples_per_fork": 10,
+        "fork_index": job["execution"]["fork_index"],
+        "warmups": 10,
+        "samples": 10,
         "batch_size": 1,
-        "timed_work_ns": sum(sum(group) for group in durations),
-        "execution_order_seed": 7,
+        "timed_work_ns": sum(durations),
         "durations_ns": durations
     },
     "metrics": {
@@ -265,7 +415,6 @@ result = {
         }
         for proof_id in [
             "semantic.independent_reference",
-            "sampling.independent_process_forks",
             "operation.state_reset",
             "boundary.complete"
         ]
@@ -320,6 +469,7 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                     "schema_version": "grakern.performance-court-plan.v1",
                     "court_id": "fixture-court",
                     "coverage_mode": "diagnostic_subset",
+                    "execution_order_seed": 7,
                     "tier1_manifest": "tier1.json",
                     "receipt_schema": str(COURT_DIRECTORY / "receipt.schema.json"),
                     "worker_result_schema": str(
@@ -359,6 +509,7 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                             "tier1_id": "fixture-row",
                             "boundary": "public_end_to_end",
                             "mode": "warm",
+                            "sampling_policy": "standard",
                             "implementation": "grakern",
                             "language": "scala-jvm",
                             "version": platform.python_version(),
@@ -378,7 +529,34 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                             "timeout_seconds": 30,
                             "application_threads": 1,
                             "blas_threads": 1,
-                        }
+                        },
+                        {
+                            "id": "fixture-grakel-job",
+                            "tier1_id": "fixture-row",
+                            "boundary": "public_end_to_end",
+                            "mode": "warm",
+                            "sampling_policy": "standard",
+                            "implementation": "grakel",
+                            "language": "python",
+                            "version": platform.python_version(),
+                            "entrypoint": "fixture",
+                            "comparator_role": "external_comparator",
+                            "semantic_translation": "identity",
+                            "command": [
+                                sys.executable,
+                                str(worker),
+                                "{job_json}",
+                                "{worker_result_json}",
+                            ],
+                            "version_command": [
+                                sys.executable,
+                                "--version",
+                            ],
+                            "working_directory": str(source),
+                            "timeout_seconds": 30,
+                            "application_threads": 1,
+                            "blas_threads": 1,
+                        },
                     ],
                 }
                 plan_path = source / "plan.json"
@@ -417,7 +595,12 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                 )
 
                 self.assertEqual(first, second)
-                receipt = court.read_json(first[0])
+                receipts = [court.read_json(path) for path in first]
+                receipt = next(
+                    candidate
+                    for candidate in receipts
+                    if candidate["implementation"]["id"] == "grakern"
+                )
                 self.assertEqual(receipt["status"], "diagnostic_only")
                 self.assertEqual(
                     receipt["semantic_output"]["observed_sha256"],
@@ -429,6 +612,29 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                     if check["id"] == "semantic.independent_contract"
                 )
                 self.assertTrue(contract_check["passed"])
+                manifests = {
+                    candidate["implementation"]["id"]: court.read_json(
+                        output / candidate["artifacts"]["worker_job"]["path"]
+                    )
+                    for candidate in receipts
+                }
+                for fork_index in range(10):
+                    records = [
+                        (
+                            implementation,
+                            manifest["invocations"][fork_index],
+                        )
+                        for implementation, manifest in manifests.items()
+                    ]
+                    actual_order = [
+                        implementation
+                        for implementation, _ in sorted(
+                            records,
+                            key=lambda item: item[1]["process"]["started_monotonic_ns"],
+                        )
+                    ]
+                    declared_order = records[0][1]["order"]
+                    self.assertEqual(actual_order, declared_order)
                 raw_samples = output / receipt["artifacts"]["raw_samples"]["path"]
                 original_raw_samples = raw_samples.read_bytes()
                 raw_samples.write_text(
@@ -446,6 +652,32 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                         diagnostic=True,
                     )
                 raw_samples.write_bytes(original_raw_samples)
+                invocation_manifest_path = (
+                    output / receipt["artifacts"]["worker_job"]["path"]
+                )
+                invocation_manifest = court.read_json(invocation_manifest_path)
+                invocation_result = (
+                    invocation_manifest_path.parent
+                    / invocation_manifest["invocations"][0]["artifacts"][
+                        "worker_result"
+                    ]["path"]
+                ).resolve()
+                original_invocation_result = invocation_result.read_bytes()
+                invocation_result.write_text(
+                    "{}\n",
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(
+                    court.CourtError,
+                    "artifact drift",
+                ):
+                    court.run_court(
+                        plan_path,
+                        output,
+                        resume=True,
+                        diagnostic=True,
+                    )
+                invocation_result.write_bytes(original_invocation_result)
                 (source / "lock.txt").write_text(
                     "drift\n",
                     encoding="utf-8",

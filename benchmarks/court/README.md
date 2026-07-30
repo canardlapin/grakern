@@ -2,13 +2,15 @@
 
 `run_performance_court.py` coordinates JVM, Python, and Julia benchmark
 workers. It does not implement graph kernels. Each worker receives one JSON
-job and returns measurements through the same JSON protocol.
+job for one process fork and returns measurements through the same JSON
+protocol.
 
 The runner enforces [ADR 008](../../docs/adr/008-performance-court.md). It
 fingerprints sources, dependency locks, runtimes, the workload manifest, and
 the runner itself before accepting results. It also checks the host before and
-after each job, captures logs, validates semantic output, retains raw samples,
-and classifies each warm Grakern row against the fastest admitted comparator.
+before and after each fork, captures logs, validates semantic output, retains
+raw samples, and classifies each warm Grakern row against the fastest admitted
+comparator.
 
 ## Run the tests
 
@@ -33,6 +35,7 @@ A plan conforming to `court-plan.schema.json` declares:
 - source repositories and the files that lock their dependencies;
 - host-admission thresholds;
 - the fixed classification thresholds from ADR 008;
+- the deterministic execution-order seed;
 - one command for each implementation, row, boundary, and cold or warm mode.
 
 A championship plan must cover every Tier-1 row at both warm boundaries for
@@ -41,8 +44,11 @@ end-to-end jobs. A diagnostic subset can exercise fewer jobs, but the runner
 accepts it only with `--diagnostic` and its receipts remain inadmissible.
 
 The command must contain `{job_json}` and `{worker_result_json}` placeholders.
-The runner replaces them with absolute paths. It invokes commands directly,
-without a shell.
+The runner replaces them with absolute paths. It invokes each command in a
+fresh process for every required fork, directly and without a shell. Within
+each row, boundary, and mode, it rotates implementation order by fork. This
+prevents one implementation from always running first on a cooler or less
+fragmented process state.
 
 For example, worker commands may have these shapes:
 
@@ -72,21 +78,27 @@ explicit identity translation when no compatibility adjustment is needed.
 
 A worker result must conform to `worker-result.schema.json`. The worker owns:
 
-- construction of independent process forks;
-- cold or warm operation sampling;
-- the declared warmup and batch policy;
+- one cold or warm process fork;
+- the declared warmup, sample, and batch policy for that fork;
 - language-specific phase and allocation measurements;
 - materialization of the requested matrix;
 - comparison with the independent expected output;
 - canonical output and sample-order checksums;
 - proof checks specific to the kernel.
 
-The runner verifies sample dimensions, timed-work accounting, the reported
-median, the minimum fork and warmup policy, finite JSON numbers, job identity,
-language, mode, thread-control environment, phase timings, and semantic
-result. Grakern workers must report allocation measurements. For a
-floating-tolerance row, the worker must return maximum absolute and relative
-errors as well as both tolerances.
+The runner owns process independence and cross-implementation ordering. It
+verifies each fork's sample dimensions, timed-work accounting, median, finite
+JSON numbers, job identity, language, mode, thread-control environment, phase
+timings, and semantic result. It then aggregates the forks, checks the minimum
+fork and timed-work policy, and records the execution-order digest. Grakern
+workers must report allocation measurements. For a floating-tolerance row,
+the worker must return maximum absolute and relative errors as well as both
+tolerances.
+
+For cold forks, the receipt uses the runner-observed duration from process
+launch through successful exit. This includes runtime startup and worker
+verification overhead. Cold latency is reported separately and never decides
+the Tier-1 winner.
 
 The worker's expected checksum is not authoritative. Every admitted Tier-1
 row carries an independently materialized `expected_output` contract with the
@@ -131,8 +143,9 @@ uv run --with psutil --with jsonschema \
   /tmp/grakern-performance-court
 ```
 
-The runner checkpoints `court-state.json` after every worker. Resume only with
-the same plan, runner files, source fingerprints, and completed draft hashes:
+The runner checkpoints `court-state.json` after every complete race group.
+Resume only with the same plan, runner files, source fingerprints, and
+completed draft hashes:
 
 ```bash
 uv run --with psutil --with jsonschema \
@@ -147,9 +160,11 @@ samples from two revisions.
 
 ## Output
 
-Each job directory contains its input, raw worker result, stdout, stderr,
-proof log, and receipt draft. Final receipts live under `receipts/` and
-conform to `receipt.schema.json`.
+Each job directory contains one subdirectory per fork and an aggregate
+directory. The aggregate manifest records every fork's process, position,
+declared order, input, result, stdout, stderr, and digest. The job directory
+also contains the proof log and receipt draft. Final receipts live under
+`receipts/` and conform to `receipt.schema.json`.
 
 The court state distinguishes completed, diagnostic, and blocked runs. A
 summary or league table must be derived from the receipts. It cannot replace

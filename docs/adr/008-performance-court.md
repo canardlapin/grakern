@@ -116,15 +116,16 @@ boundary instead of reusing this one.
 
 Cold and warm measurements are different products and are never combined.
 
-- A cold receipt starts a fresh process and includes runtime startup, imports,
-  class loading, JIT or Julia compilation, and one complete public
-  end-to-end operation.
+- A cold receipt measures from fresh worker-process launch through successful
+  worker exit. It includes runtime startup, imports, class loading, JIT or
+  Julia compilation, one complete public end-to-end operation, semantic
+  verification, and protocol serialization.
 - A warm receipt starts a fresh process, performs the declared warmup, then
   times complete operations from a reset operation state. Runtime code and
   filesystem caches may be warm; kernel artifacts may not be reused.
 
-Cold startup is reported for every implementation but does not decide the
-Tier-1 speed winner. Warm wall-clock time decides the speed classification.
+Cold process latency is reported for every implementation but does not decide
+the Tier-1 speed winner. Warm wall-clock time decides the speed classification.
 
 The initial sampling contract is:
 
@@ -135,9 +136,11 @@ The initial sampling contract is:
 - at least 30 seconds of timed work for each implementation and row.
 
 Calibration runs in a disposable process. The recorded process uses the fixed
-batch count chosen by calibration. Implementations run in a deterministic
-rotating order across forks. The receipt stores every raw duration and the
-fork and batch membership.
+batch count chosen by calibration. The court runner launches one fresh worker
+process per fork and rotates implementation position deterministically within
+each row, boundary, and mode. The receipt stores the execution-order seed and
+schedule digest together with every raw duration and its fork and batch
+membership.
 
 The court may reduce the sample count for a row whose single operation exceeds
 two seconds, but it still requires at least five forks, five samples per fork,

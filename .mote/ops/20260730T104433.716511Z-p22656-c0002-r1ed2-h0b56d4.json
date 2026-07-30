@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"bd-01KYRBCW98HHQXTP6D9FRKJEG2","kind":"note","note_kind":"progress","op":"20260730T104433.716511Z-p22656-c0002-r1ed2-h0b56d4","text":"reworking worker protocol to one process fork per invocation so the orchestrator can execute deterministic rotating cross-implementation schedules","ts":"2026-07-30T10:44:33.716511Z","v":1}
