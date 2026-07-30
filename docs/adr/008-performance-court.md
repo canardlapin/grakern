@@ -31,11 +31,12 @@ records timing:
    convention, but it may not discard information or change the kernel.
 5. The output shape, sample order, and semantic checksum agree.
 
-The court uses exact row-major IEEE-754 checksums for the unnormalized
-integer-valued Tier-1 kernels. It canonicalizes negative zero to positive zero
-before hashing. A row that requires floating comparison instead records
-absolute and relative tolerances, compares every element, and hashes the
-canonical expected output separately. NaN and infinity always fail admission.
+The court uses exact row-major, big-endian IEEE-754 binary64 checksums for the
+unnormalized integer-valued Tier-1 kernels. It canonicalizes negative zero to
+positive zero before hashing. A row that requires floating comparison instead
+records absolute and relative tolerances, compares every element, and hashes
+the canonical expected output separately. NaN and infinity always fail
+admission.
 
 The evidence ladder is:
 

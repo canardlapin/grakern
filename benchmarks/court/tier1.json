@@ -1,220 +1,544 @@
 {
-  "schema_version": "grakern.performance-tier1.v1",
   "adr": "docs/adr/008-performance-court.md",
-  "championship_metric": "warm_wall_clock_ns",
-  "thread_policy": {
-    "application_threads": 1,
-    "blas_threads": 1
-  },
   "boundaries": [
     "public_end_to_end",
     "prepared_topology"
   ],
+  "championship_metric": "warm_wall_clock_ns",
   "comparators": {
     "grakel": {
       "distribution": "GraKeL",
-      "version": "0.1.10",
+      "numpy": "1.26.4",
       "python": "3.11",
-      "numpy": "1.26.4"
+      "version": "0.1.10"
     },
     "graphkernels_jl": {
       "package": "GraphKernels.jl",
-      "version": "0.2.0",
-      "revision": "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
+      "revision": "f04797de0b86a39172b6adbcfcee35ec4b39f91b",
+      "version": "0.2.0"
     }
   },
   "corpora": {
     "mutag-188": {
-      "kind": "tu_dataset",
-      "source": "https://www.chrsmrrs.com/graphkerneldatasets/MUTAG.zip",
       "archive_sha256": "c419bdc853c367d2d83da4973c45100954ae15e10f5ae2cddde6ca431f8207f6",
+      "content_sha256": "facfbb3e179756bf6ef2567140a1576673c218406b204c1a096d87543e26dc42",
       "graph_count": 188,
-      "content_digest_required": true
-    },
-    "synthetic-sparse-label8": {
-      "kind": "generated",
-      "generator_schema": "grakern.synthetic-graphs.v1",
-      "seed": 730201,
-      "graph_count": 256,
-      "vertex_count": {
-        "minimum": 24,
-        "maximum": 40
-      },
-      "topology": {
-        "connected": true,
-        "target_mean_degree": 4
-      },
-      "node_label_cardinality": 8,
-      "content_digest_required": true
+      "kind": "tu_dataset",
+      "path": "benchmarks/court/workloads/corpora/mutag-188.json",
+      "source": "https://www.chrsmrrs.com/graphkerneldatasets/MUTAG.zip"
     },
     "synthetic-dense-label2": {
-      "kind": "generated",
+      "content_sha256": "cdce9272764b0021853869668e075e3f19bf3fa497651e9d48f6af1fae2cfbfe",
       "generator_schema": "grakern.synthetic-graphs.v1",
-      "seed": 730202,
       "graph_count": 192,
-      "vertex_count": {
-        "minimum": 28,
-        "maximum": 36
-      },
+      "kind": "generated",
+      "node_label_cardinality": 2,
+      "path": "benchmarks/court/workloads/corpora/synthetic-dense-label2.json",
+      "seed": 730202,
       "topology": {
         "connected": true,
         "edge_probability": 0.2
       },
-      "node_label_cardinality": 2,
-      "content_digest_required": true
+      "vertex_count": {
+        "maximum": 36,
+        "minimum": 28
+      }
     },
     "synthetic-multiplicity": {
-      "kind": "generated",
+      "content_sha256": "c54eddb00d98e9143bb96e2b7bb057d8f9167aadc3445abd0f0d3954ed5e153f",
       "generator_schema": "grakern.synthetic-graphs.v1",
-      "seed": 730203,
       "graph_count": 256,
-      "vertex_count": {
-        "minimum": 40,
-        "maximum": 56
-      },
+      "kind": "generated",
+      "node_label_cardinality": 2,
+      "path": "benchmarks/court/workloads/corpora/synthetic-multiplicity.json",
+      "seed": 730203,
       "topology": {
         "connected": true,
         "target_mean_degree": 4
       },
-      "node_label_cardinality": 2,
-      "content_digest_required": true
+      "vertex_count": {
+        "maximum": 56,
+        "minimum": 40
+      }
+    },
+    "synthetic-query-novelty": {
+      "content_sha256": "9fd11fac3dfa2001390ca0b041fcae93be9af496fc0788379c93f0a6faefa4ca",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "kind": "generated_train_query",
+      "path": "benchmarks/court/workloads/corpora/synthetic-query-novelty.json",
+      "query_graph_count": 64,
+      "query_novel_label_rate": 0.25,
+      "seed": 730205,
+      "topology": {
+        "connected": true,
+        "target_mean_degree": 4
+      },
+      "training_graph_count": 256,
+      "training_node_label_cardinality": 8,
+      "vertex_count": {
+        "maximum": 40,
+        "minimum": 24
+      }
     },
     "synthetic-regular-uniform": {
-      "kind": "generated",
+      "content_sha256": "f0a6fd1e8ba3a285523db134bbd26db13c0f22e3645c6eb5c1e63a61dacc91e6",
       "generator_schema": "grakern.synthetic-graphs.v1",
-      "seed": 730204,
       "graph_count": 256,
-      "vertex_count": {
-        "minimum": 32,
-        "maximum": 32
-      },
+      "kind": "generated",
+      "node_label_cardinality": 1,
+      "path": "benchmarks/court/workloads/corpora/synthetic-regular-uniform.json",
+      "seed": 730204,
       "topology": {
         "connected": true,
         "regular_degree": 4
       },
-      "node_label_cardinality": 1,
-      "content_digest_required": true
-    },
-    "synthetic-query-novelty": {
-      "kind": "generated_train_query",
-      "generator_schema": "grakern.synthetic-graphs.v1",
-      "seed": 730205,
-      "training_graph_count": 256,
-      "query_graph_count": 64,
       "vertex_count": {
-        "minimum": 24,
-        "maximum": 40
-      },
+        "maximum": 32,
+        "minimum": 32
+      }
+    },
+    "synthetic-sparse-label8": {
+      "content_sha256": "bcbab4a3e50b8a02a9f1e2a13e4b84e1a857b5915d1b7b2ac850ea59785c96b4",
+      "generator_schema": "grakern.synthetic-graphs.v1",
+      "graph_count": 256,
+      "kind": "generated",
+      "node_label_cardinality": 8,
+      "path": "benchmarks/court/workloads/corpora/synthetic-sparse-label8.json",
+      "seed": 730201,
       "topology": {
         "connected": true,
         "target_mean_degree": 4
       },
-      "training_node_label_cardinality": 8,
-      "query_novel_label_rate": 0.25,
-      "content_digest_required": true
+      "vertex_count": {
+        "maximum": 40,
+        "minimum": 24
+      }
     }
   },
+  "expansion_rule": "Every row expands to both declared boundaries. Each expanded row is classified independently.",
+  "immutable_after_first_baseline": true,
   "kernel_configurations": {
-    "wl-subtree-r5": {
-      "kernel": "wl_subtree",
-      "rounds": 5,
-      "node_labels": "categorical",
-      "edge_labels": "constant",
+    "shortest-path-unlabeled": {
+      "distance": "unit_hops",
+      "kernel": "categorical_shortest_path",
+      "node_labels": "constant",
       "normalized": false,
-      "output_kind": "gram"
+      "output_kind": "gram",
+      "pair_identity": "unordered_off_diagonal_reachable"
     },
     "wl-oa-r5": {
-      "kernel": "wl_optimal_assignment",
-      "rounds": 5,
-      "node_labels": "categorical",
       "edge_labels": "constant",
+      "kernel": "wl_optimal_assignment",
+      "node_labels": "categorical",
       "normalized": false,
-      "output_kind": "gram"
-    },
-    "shortest-path-unlabeled": {
-      "kernel": "categorical_shortest_path",
-      "distance": "unit_hops",
-      "node_labels": "constant",
-      "pair_identity": "unordered_off_diagonal_reachable",
-      "normalized": false,
-      "output_kind": "gram"
+      "output_kind": "gram",
+      "rounds": 5
     },
     "wl-subtree-cross-r5": {
-      "kernel": "wl_subtree_cross",
-      "rounds": 5,
-      "node_labels": "categorical",
       "edge_labels": "constant",
+      "kernel": "wl_subtree_cross",
+      "node_labels": "categorical",
       "normalized": false,
-      "output_kind": "cross"
+      "output_kind": "cross",
+      "rounds": 5
+    },
+    "wl-subtree-r5": {
+      "edge_labels": "constant",
+      "kernel": "wl_subtree",
+      "node_labels": "categorical",
+      "normalized": false,
+      "output_kind": "gram",
+      "rounds": 5
     }
   },
   "rows": [
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "mutag-188",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-subtree-mutag.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "665f89e1586e256c03e32e897f3e9f0bfef665c77ae9a4b7b5c49ec5e4367190",
+        "sample_order_sha256": "3cde3c3f0de38cdf7cb67921eafabadf0047f47af52166d112d231e69b641ff8",
+        "shape": [
+          188,
+          188
+        ]
+      },
       "id": "t1-wl-subtree-mutag",
       "kernel": "wl-subtree-r5",
-      "corpus": "mutag-188",
-      "comparators": ["grakel"]
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": [
+            {
+              "n_iter": 5,
+              "name": "weisfeiler_lehman"
+            },
+            {
+              "name": "subtree_wl"
+            }
+          ],
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "synthetic-sparse-label8",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-subtree-sparse.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "7bb6dc5fa5e072c8f05af1688f71b1e9e940c1677d2d1905b9d66a0ea85a9813",
+        "sample_order_sha256": "cb8596db288fa3c3bce05da4609452a00d77b4c9db6c25877334e8b8c64ec1cd",
+        "shape": [
+          256,
+          256
+        ]
+      },
       "id": "t1-wl-subtree-sparse",
       "kernel": "wl-subtree-r5",
-      "corpus": "synthetic-sparse-label8",
-      "comparators": ["grakel"]
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": [
+            {
+              "n_iter": 5,
+              "name": "weisfeiler_lehman"
+            },
+            {
+              "name": "subtree_wl"
+            }
+          ],
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "synthetic-dense-label2",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-subtree-dense.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "e4cad295a80a796339a3706e34b41eadf88f12884f6b42b95ffbbf8eafda6bfc",
+        "sample_order_sha256": "8cc5a46874d00fca2911a3bab161cb43983e75cc76ab947b8f8a8561b213741c",
+        "shape": [
+          192,
+          192
+        ]
+      },
       "id": "t1-wl-subtree-dense",
       "kernel": "wl-subtree-r5",
-      "corpus": "synthetic-dense-label2",
-      "comparators": ["grakel"]
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": [
+            {
+              "n_iter": 5,
+              "name": "weisfeiler_lehman"
+            },
+            {
+              "name": "subtree_wl"
+            }
+          ],
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel",
+        "graphkernels_jl"
+      ],
+      "corpus": "synthetic-regular-uniform",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-subtree-regular-julia.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "f8e196e4d777853edf5ae8a2da6ab3860390a96d8460e6fc97db0b89f03fb825",
+        "sample_order_sha256": "b2b917605ab02b033934046092d7a378b83157d90cd39b29fe0720678c0d199b",
+        "shape": [
+          256,
+          256
+        ]
+      },
+      "graphkernels_jl_scope": "uniform-labeled regular graphs only",
       "id": "t1-wl-subtree-regular-julia",
       "kernel": "wl-subtree-r5",
-      "corpus": "synthetic-regular-uniform",
-      "comparators": ["grakel", "graphkernels_jl"],
-      "graphkernels_jl_scope": "uniform-labeled regular graphs only"
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": [
+            {
+              "n_iter": 5,
+              "name": "weisfeiler_lehman"
+            },
+            {
+              "name": "subtree_wl"
+            }
+          ],
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        },
+        "graphkernels_jl": {
+          "base_kernel": "exact vertex histogram",
+          "num_iterations": 6,
+          "scope": "uniform-labeled regular graphs only",
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "mutag-188",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-oa-mutag.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "7516ebe3e487c7fbdf39b8b07e4d8f6a1e3a11c03a6eeda061b12c8f67352ade",
+        "sample_order_sha256": "3cde3c3f0de38cdf7cb67921eafabadf0047f47af52166d112d231e69b641ff8",
+        "shape": [
+          188,
+          188
+        ]
+      },
       "id": "t1-wl-oa-mutag",
       "kernel": "wl-oa-r5",
-      "corpus": "mutag-188",
-      "comparators": ["grakel"]
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": {
+            "n_iter": 5,
+            "name": "weisfeiler_lehman_optimal_assignment"
+          },
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "synthetic-multiplicity",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-oa-multiplicity.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "6fa5d7ee29ea0bb934362740e2f7488d2d8d4bf1389947959201f04c0e579dfd",
+        "sample_order_sha256": "9518739050b3b798bdff25c9ec43d4f34f53eb3596e3dbde4faddda1aa9daf22",
+        "shape": [
+          256,
+          256
+        ]
+      },
       "id": "t1-wl-oa-multiplicity",
       "kernel": "wl-oa-r5",
-      "corpus": "synthetic-multiplicity",
-      "comparators": ["grakel"]
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": {
+            "n_iter": 5,
+            "name": "weisfeiler_lehman_optimal_assignment"
+          },
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel",
+        "graphkernels_jl"
+      ],
+      "corpus": "mutag-188",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-shortest-path-mutag.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "eb1bb60bd0bcf9cf83ac5990a2f13cf9616455ac0266b57f7aa27db94ee17d19",
+        "sample_order_sha256": "3cde3c3f0de38cdf7cb67921eafabadf0047f47af52166d112d231e69b641ff8",
+        "shape": [
+          188,
+          188
+        ]
+      },
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor",
       "id": "t1-shortest-path-mutag",
       "kernel": "shortest-path-unlabeled",
-      "corpus": "mutag-188",
-      "comparators": ["grakel", "graphkernels_jl"],
-      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+      "semantic_alignment": {
+        "grakel": {
+          "algorithm_type": "floyd_warshall",
+          "kernel": "shortest_path",
+          "normalize": false,
+          "translation": {
+            "divide_raw_output_by": 4,
+            "reason": "ordered-pair feature counts"
+          },
+          "with_labels": false
+        },
+        "grakern": {
+          "translation": "identity"
+        },
+        "graphkernels_jl": {
+          "dist_key": null,
+          "kernel": "ShortestPathGraphKernel",
+          "translation": {
+            "divide_raw_output_by": 8,
+            "reason": "ordered-pair counts and additive constant endpoint scores"
+          },
+          "vertex_kernel": "ConstVertexKernel(1.0)"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel",
+        "graphkernels_jl"
+      ],
+      "corpus": "synthetic-sparse-label8",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-shortest-path-sparse.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "27401061ca66505948ff4484230ac1e841f46f7c0352e0db0682635195bddf99",
+        "sample_order_sha256": "cb8596db288fa3c3bce05da4609452a00d77b4c9db6c25877334e8b8c64ec1cd",
+        "shape": [
+          256,
+          256
+        ]
+      },
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor",
       "id": "t1-shortest-path-sparse",
       "kernel": "shortest-path-unlabeled",
-      "corpus": "synthetic-sparse-label8",
-      "comparators": ["grakel", "graphkernels_jl"],
-      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+      "semantic_alignment": {
+        "grakel": {
+          "algorithm_type": "floyd_warshall",
+          "kernel": "shortest_path",
+          "normalize": false,
+          "translation": {
+            "divide_raw_output_by": 4,
+            "reason": "ordered-pair feature counts"
+          },
+          "with_labels": false
+        },
+        "grakern": {
+          "translation": "identity"
+        },
+        "graphkernels_jl": {
+          "dist_key": null,
+          "kernel": "ShortestPathGraphKernel",
+          "translation": {
+            "divide_raw_output_by": 8,
+            "reason": "ordered-pair counts and additive constant endpoint scores"
+          },
+          "vertex_kernel": "ConstVertexKernel(1.0)"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel",
+        "graphkernels_jl"
+      ],
+      "corpus": "synthetic-regular-uniform",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-shortest-path-regular-julia.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "463fb348f458382a19947df0c715b05a36e77ea3d5d51bbda50d13ccbc868a86",
+        "sample_order_sha256": "b2b917605ab02b033934046092d7a378b83157d90cd39b29fe0720678c0d199b",
+        "shape": [
+          256,
+          256
+        ]
+      },
+      "graphkernels_jl_translation": "ordered-pair and additive-constant factor",
       "id": "t1-shortest-path-regular-julia",
       "kernel": "shortest-path-unlabeled",
-      "corpus": "synthetic-regular-uniform",
-      "comparators": ["grakel", "graphkernels_jl"],
-      "graphkernels_jl_translation": "ordered-pair and additive-constant factor"
+      "semantic_alignment": {
+        "grakel": {
+          "algorithm_type": "floyd_warshall",
+          "kernel": "shortest_path",
+          "normalize": false,
+          "translation": {
+            "divide_raw_output_by": 4,
+            "reason": "ordered-pair feature counts"
+          },
+          "with_labels": false
+        },
+        "grakern": {
+          "translation": "identity"
+        },
+        "graphkernels_jl": {
+          "dist_key": null,
+          "kernel": "ShortestPathGraphKernel",
+          "translation": {
+            "divide_raw_output_by": 8,
+            "reason": "ordered-pair counts and additive constant endpoint scores"
+          },
+          "vertex_kernel": "ConstVertexKernel(1.0)"
+        }
+      }
     },
     {
+      "comparators": [
+        "grakel"
+      ],
+      "corpus": "synthetic-query-novelty",
+      "expected_output": {
+        "artifact": "benchmarks/court/workloads/expected/t1-wl-subtree-cross-novel.json",
+        "comparison": "exact_ieee754",
+        "expected_sha256": "ca5f3088afa10035f4441c441a743d9ec1204f5424fcb265cd9284b15be28400",
+        "sample_order_sha256": "7c43e0181931fa6ef0e70ac052f39da0ffefbed65907fcf48ef9780944d2c9e9",
+        "shape": [
+          64,
+          256
+        ]
+      },
       "id": "t1-wl-subtree-cross-novel",
       "kernel": "wl-subtree-cross-r5",
-      "corpus": "synthetic-query-novelty",
-      "comparators": ["grakel"],
-      "scope": "unnormalized cross values"
+      "scope": "unnormalized cross values",
+      "semantic_alignment": {
+        "grakel": {
+          "kernel": [
+            {
+              "n_iter": 5,
+              "name": "weisfeiler_lehman"
+            },
+            {
+              "name": "subtree_wl"
+            }
+          ],
+          "normalize": false,
+          "translation": "identity"
+        },
+        "grakern": {
+          "translation": "identity"
+        }
+      }
     }
   ],
-  "expansion_rule": "Every row expands to both declared boundaries. Each expanded row is classified independently.",
-  "immutable_after_first_baseline": true
+  "schema_version": "grakern.performance-tier1.v1",
+  "thread_policy": {
+    "application_threads": 1,
+    "blas_threads": 1
+  }
 }

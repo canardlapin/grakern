@@ -7,10 +7,56 @@ protocol.
 
 The runner enforces [ADR 008](../../docs/adr/008-performance-court.md). It
 fingerprints sources, dependency locks, runtimes, the workload manifest, and
-the runner itself before accepting results. It also checks the host before and
-before and after each fork, captures logs, validates semantic output, retains
+the runner itself before accepting results. It also checks the host before
+and after each fork, captures logs, validates semantic output, retains
 raw samples, and classifies each warm Grakern row against the fastest admitted
 comparator.
+
+## Tier-1 workloads
+
+[`tier1.json`](tier1.json) is the immutable race card. Its corpus entries
+point to canonical, implementation-neutral graph JSON under
+[`workloads/corpora`](workloads/corpora), and each row points to an independent
+expected matrix under [`workloads/expected`](workloads/expected). The formats
+are defined by
+[`corpus.schema.json`](workloads/corpus.schema.json) and
+[`expected-output.schema.json`](workloads/expected-output.schema.json).
+
+The neutral graph format contains graph-scoped integer vertex ordinals,
+categorical integer node labels, sorted unique undirected edges, stable sample
+keys, and explicit training and query splits. It deliberately does not encode
+a Grakern, graph4s, GraKeL, or GraphKernels.jl object model. A comparator
+worker must construct its native representation from this common source.
+
+The expected matrices are produced by the small independent combinatorial
+interpreter in
+[`generate_workloads.py`](workloads/generate_workloads.py). They are not
+produced by Grakern or by an external comparator. Exact Tier-1 matrices use
+row-major, big-endian IEEE-754 binary64 (`.f64be`), with negative zero
+canonicalized to positive zero. The metadata records the ordered row and
+column sample keys, their digest, the matrix shape, and the binary digest.
+
+MUTAG is pinned to the TU Dortmund archive at
+`https://www.chrsmrrs.com/graphkerneldatasets/MUTAG.zip` with SHA-256:
+
+```text
+c419bdc853c367d2d83da4973c45100954ae15e10f5ae2cddde6ca431f8207f6
+```
+
+Regenerate or verify the complete fixture set with the pinned local archive:
+
+```bash
+python3 benchmarks/court/workloads/generate_workloads.py \
+  --mutag-archive /path/to/MUTAG.zip
+
+python3 benchmarks/court/workloads/generate_workloads.py \
+  --mutag-archive /path/to/MUTAG.zip \
+  --check
+```
+
+`--check` is read-only and fails on a missing, stale, or extra generated
+artifact. Omitting `--mutag-archive` downloads the pinned URL and still
+requires the recorded archive checksum.
 
 ## Run the tests
 
@@ -23,6 +69,16 @@ uv run \
   --with jsonschema \
   python -m unittest discover \
   -s benchmarks/court/tests \
+  -v
+```
+
+The independent workload oracle has a separate suite:
+
+```bash
+uv run \
+  --with jsonschema \
+  python -m unittest discover \
+  -s benchmarks/court/workloads/tests \
   -v
 ```
 

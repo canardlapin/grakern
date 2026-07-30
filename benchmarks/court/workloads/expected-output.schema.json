@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grakern.dev/schemas/independent-kernel-output-v1.json",
+  "title": "Grakern independent kernel output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "row_id",
+    "comparison",
+    "shape",
+    "rows",
+    "columns",
+    "sample_order_sha256",
+    "expected_sha256",
+    "binary",
+    "independent_oracle"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "grakern.independent-kernel-output.v1"
+    },
+    "row_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "comparison": {
+      "const": "exact_ieee754"
+    },
+    "shape": {
+      "$ref": "#/$defs/shape"
+    },
+    "rows": {
+      "$ref": "#/$defs/sampleKeys"
+    },
+    "columns": {
+      "$ref": "#/$defs/sampleKeys"
+    },
+    "sample_order_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "expected_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "binary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "byte_order",
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "format": {
+          "const": "row-major IEEE-754 binary64"
+        },
+        "byte_order": {
+          "const": "big"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^benchmarks/court/workloads/expected/.+\\.f64be$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "independent_oracle": {
+      "const": "benchmarks/court/workloads/generate_workloads.py"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "shape": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "sampleKeys": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "uniqueItems": true
+    }
+  }
+}

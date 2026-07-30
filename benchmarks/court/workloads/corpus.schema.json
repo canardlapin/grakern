@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://grakern.dev/schemas/neutral-graph-corpus-v1.json",
+  "title": "Grakern neutral graph corpus",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "provenance",
+    "training_graphs",
+    "query_graphs"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "grakern.neutral-graph-corpus.v1"
+    },
+    "corpus_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provenance": {
+      "type": "object"
+    },
+    "training_graphs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/graph"
+      },
+      "minItems": 1
+    },
+    "query_graphs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/graph"
+      }
+    }
+  },
+  "$defs": {
+    "vertex": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "edge": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/vertex"
+        },
+        {
+          "$ref": "#/$defs/vertex"
+        }
+      ],
+      "items": false,
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "node_labels",
+        "edges"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "node_labels": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/edge"
+          },
+          "uniqueItems": true
+        },
+        "class_label": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}
