@@ -171,6 +171,10 @@ final class WorkerEngineSuite extends FunSuite:
       Some("grakern.performance-worker-result.v1")
     )
 
+  test("protocol rounding uses ties to even"):
+    assertEquals(WorkerEngine.roundHalfEven(2.5), 2L)
+    assertEquals(WorkerEngine.roundHalfEven(3.5), 4L)
+
   test("CLI accepts court artifacts outside the source checkout"):
     val directory =
       Files.createTempDirectory("grakern-worker-cli-")

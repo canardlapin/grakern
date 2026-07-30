@@ -276,7 +276,7 @@ private[benchmark] object WorkerEngine:
       val cpuAfter = operatingSystem.getProcessCpuTime()
       val peakRss = math.max(runtimeBaseline, rssBytes())
       val medianDuration =
-        math.round(
+        roundHalfEven(
           median(
             durationValues.map(_.toDouble / batchSize.toDouble)
           )
@@ -287,7 +287,7 @@ private[benchmark] object WorkerEngine:
             .sortBy(_._1)
             .map { case (name, values) =>
               name -> Json.fromLong(
-                math.round(median(values))
+                roundHalfEven(median(values))
               )
             }*
         )
@@ -627,6 +627,11 @@ private[benchmark] object WorkerEngine:
     val middle = sorted.size / 2
     if sorted.size % 2 == 1 then sorted(middle)
     else (sorted(middle - 1) + sorted(middle)) / 2.0
+
+  private[benchmark] def roundHalfEven(
+      value: Double
+  ): Long =
+    java.lang.Math.rint(value).toLong
 
   private def runtimeJson(job: WorkerJob): Json =
     val names =
