@@ -6,9 +6,20 @@ const TIER1 = read_json(
     joinpath(REPOSITORY, "benchmarks", "court", "tier1.json"),
 )
 
-@assert choose_batch_size(1_000_000, "warm") == 120
-@assert choose_batch_size(99_000_000, "warm") == 2
-@assert choose_batch_size(100_000_000, "warm") == 1
+const STANDARD_CONTRACT = Dict{String, Any}(
+    "forks" => 10,
+    "mode" => "warm",
+    "samples" => 30,
+)
+const EXPENSIVE_CONTRACT = Dict{String, Any}(
+    "forks" => 5,
+    "mode" => "warm",
+    "samples" => 5,
+)
+@assert target_sample_ns(STANDARD_CONTRACT) == 200_000_000
+@assert target_sample_ns(EXPENSIVE_CONTRACT) == 2_400_000_000
+@assert choose_batch_size(100_000_000, STANDARD_CONTRACT) == 2
+@assert choose_batch_size(200_000_000, STANDARD_CONTRACT) == 1
 
 function payload(row::Dict{String, Any}, boundary::String)
     return Dict{String, Any}(
@@ -51,6 +62,7 @@ function verify_protocol_result()
     worker_payload = payload(row, "prepared_topology")
     worker_payload["execution"] = Dict("fork_index" => 0)
     worker_payload["sampling_contract"] = Dict(
+        "forks" => 1,
         "mode" => "cold",
         "policy" => "standard",
         "warmups" => 0,

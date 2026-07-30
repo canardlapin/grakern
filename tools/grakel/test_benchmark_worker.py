@@ -31,16 +31,30 @@ class GraKeLBenchmarkWorkerSuite(unittest.TestCase):
             "expected_output": row["expected_output"],
         }
 
-    def test_standard_batching_targets_120_ms_without_batching_boundary(
+    def test_batching_uses_the_60_second_evidence_target(
         self,
     ) -> None:
-        self.assertEqual(benchmark_worker.choose_batch_size(1_000_000, "warm"), 120)
+        standard = {
+            "forks": 10,
+            "mode": "warm",
+            "samples": 30,
+        }
+        expensive = {
+            "forks": 5,
+            "mode": "warm",
+            "samples": 5,
+        }
+        self.assertEqual(benchmark_worker.target_sample_ns(standard), 200_000_000)
         self.assertEqual(
-            benchmark_worker.choose_batch_size(99_000_000, "warm"),
+            benchmark_worker.target_sample_ns(expensive),
+            2_400_000_000,
+        )
+        self.assertEqual(
+            benchmark_worker.choose_batch_size(100_000_000, standard),
             2,
         )
         self.assertEqual(
-            benchmark_worker.choose_batch_size(100_000_000, "warm"),
+            benchmark_worker.choose_batch_size(200_000_000, standard),
             1,
         )
 
@@ -84,6 +98,7 @@ class GraKeLBenchmarkWorkerSuite(unittest.TestCase):
         payload["job"]["environment"] = {}
         payload["execution"] = {"fork_index": 0}
         payload["sampling_contract"] = {
+            "forks": 1,
             "mode": "cold",
             "policy": "standard",
             "warmups": 0,

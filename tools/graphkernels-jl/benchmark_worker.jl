@@ -9,7 +9,8 @@ using Statistics
 
 const REPOSITORY = normpath(joinpath(@__DIR__, "..", ".."))
 const REVISION = "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
-const TARGET_SAMPLE_NS = 120_000_000
+const TARGET_WARM_TIMED_WORK_NS = 60_000_000_000
+const MINIMUM_TARGET_SAMPLE_NS = 200_000_000
 const MAX_BATCH_SIZE = 100_000
 const THREAD_ENVIRONMENT = [
     "GRAKERN_COURT_APPLICATION_THREADS",
@@ -192,11 +193,28 @@ function sample_order_sha256(
     return bytes2hex(sha256(codeunits(payload)))
 end
 
-function choose_batch_size(calibration_ns::Int, mode::String)
-    if mode == "cold" || calibration_ns >= 100_000_000
+function target_sample_ns(contract::Dict{String, Any})
+    measurement_count = max(
+        1,
+        Int(contract["forks"]) * Int(contract["samples"]),
+    )
+    return max(
+        MINIMUM_TARGET_SAMPLE_NS,
+        cld(TARGET_WARM_TIMED_WORK_NS, measurement_count),
+    )
+end
+
+function choose_batch_size(
+    calibration_ns::Int,
+    contract::Dict{String, Any},
+)
+    if String(contract["mode"]) == "cold"
         return 1
     end
-    estimate = max(1, cld(TARGET_SAMPLE_NS, max(1, calibration_ns)))
+    estimate = max(
+        1,
+        cld(target_sample_ns(contract), max(1, calibration_ns)),
+    )
     return min(estimate, MAX_BATCH_SIZE)
 end
 
@@ -249,8 +267,28 @@ function run_worker(payload::Dict{String, Any})
         calibration_started = time_ns()
         last_matrix, _, last_rows, last_columns =
             evaluate_once(context)
-        calibration_ns = max(1, Int(time_ns() - calibration_started))
-        batch_size = choose_batch_size(calibration_ns, mode)
+        first_elapsed =
+            max(1, Int(time_ns() - calibration_started))
+        pilot_batch =
+            choose_batch_size(first_elapsed, contract)
+        observed_ns = first_elapsed
+        for _ in 1:2
+            for _ in 1:pilot_batch
+                operation_started = time_ns()
+                last_matrix, _, last_rows, last_columns =
+                    evaluate_once(context)
+                observed_ns = min(
+                    observed_ns,
+                    max(
+                        1,
+                        Int(time_ns() - operation_started),
+                    ),
+                )
+            end
+        end
+        calibration_ns = observed_ns
+        batch_size =
+            choose_batch_size(calibration_ns, contract)
     end
 
     durations = Int[]

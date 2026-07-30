@@ -25,7 +25,8 @@ import numpy as np
 from grakel import GraphKernel
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-TARGET_SAMPLE_NS = 120_000_000
+TARGET_WARM_TIMED_WORK_NS = 60_000_000_000
+MINIMUM_TARGET_SAMPLE_NS = 200_000_000
 MAX_BATCH_SIZE = 100_000
 THREAD_ENVIRONMENT = (
     "GRAKERN_COURT_APPLICATION_THREADS",
@@ -244,10 +245,24 @@ def available(value: int) -> dict[str, Any]:
     }
 
 
-def choose_batch_size(calibration_ns: int, mode: str) -> int:
-    if mode == "cold" or calibration_ns >= 100_000_000:
+def target_sample_ns(contract: dict[str, Any]) -> int:
+    measurement_count = max(1, contract["forks"] * contract["samples"])
+    return max(
+        MINIMUM_TARGET_SAMPLE_NS,
+        math.ceil(TARGET_WARM_TIMED_WORK_NS / measurement_count),
+    )
+
+
+def choose_batch_size(
+    calibration_ns: int,
+    contract: dict[str, Any],
+) -> int:
+    if contract["mode"] == "cold":
         return 1
-    estimate = max(1, math.ceil(TARGET_SAMPLE_NS / max(1, calibration_ns)))
+    estimate = max(
+        1,
+        math.ceil(target_sample_ns(contract) / max(1, calibration_ns)),
+    )
     return min(estimate, MAX_BATCH_SIZE)
 
 
@@ -291,8 +306,27 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
             last_rows,
             last_columns,
         ) = evaluate_once(context)
-        calibration_ns = max(1, time.perf_counter_ns() - calibration_started)
-        batch_size = choose_batch_size(calibration_ns, mode)
+        first_elapsed = max(
+            1,
+            time.perf_counter_ns() - calibration_started,
+        )
+        pilot_batch = choose_batch_size(first_elapsed, contract)
+        observed_ns = first_elapsed
+        for _ in range(2):
+            for _ in range(pilot_batch):
+                operation_started = time.perf_counter_ns()
+                (
+                    last_matrix,
+                    _,
+                    last_rows,
+                    last_columns,
+                ) = evaluate_once(context)
+                observed_ns = min(
+                    observed_ns,
+                    max(1, time.perf_counter_ns() - operation_started),
+                )
+        calibration_ns = observed_ns
+        batch_size = choose_batch_size(calibration_ns, contract)
 
     durations: list[int] = []
     phase_samples: dict[str, list[float]] = {}
