@@ -19,7 +19,7 @@ object HopDistance:
     * vertices are connected. A shortest simple path in a finite graph has at most `n - 1` edges, so
     * the value also fits in `Int`.
     */
-  private[shortestpath] def knownPositive(value: Int): HopDistance =
+  private[grakern] def knownPositive(value: Int): HopDistance =
     value
 
   extension (distance: HopDistance) def toInt: Int = distance
