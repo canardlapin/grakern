@@ -25,7 +25,7 @@ import numpy as np
 from grakel import GraphKernel
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-TARGET_SAMPLE_NS = 100_000_000
+TARGET_SAMPLE_NS = 120_000_000
 MAX_BATCH_SIZE = 100_000
 THREAD_ENVIRONMENT = (
     "GRAKERN_COURT_APPLICATION_THREADS",
@@ -277,6 +277,9 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
     last_matrix: np.ndarray[Any, np.dtype[np.float64]] | None = None
     last_rows: list[str] = []
     last_columns: list[str] = []
+    for _ in range(contract["warmups"]):
+        last_matrix, _, last_rows, last_columns = evaluate_once(context)
+
     if mode == "cold":
         batch_size = 1
     else:
@@ -289,8 +292,6 @@ def run_worker(payload: dict[str, Any]) -> dict[str, Any]:
         ) = evaluate_once(context)
         calibration_ns = time.perf_counter_ns() - calibration_started
         batch_size = choose_batch_size(calibration_ns, mode)
-    for _ in range(contract["warmups"]):
-        last_matrix, _, last_rows, last_columns = evaluate_once(context)
 
     durations: list[int] = []
     phase_samples: dict[str, list[float]] = {}

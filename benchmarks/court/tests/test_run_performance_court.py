@@ -47,7 +47,7 @@ def timed_receipt(
         },
         "sampling": {
             "mode": "warm",
-            "batch_size": 1,
+            "batch_sizes": [1 for _ in range(10)],
             "durations_ns": [[duration for _ in range(10)] for _ in range(10)],
         },
         "metrics": {
@@ -143,6 +143,26 @@ def cold_invocation(
 
 
 class CourtContractSuite(unittest.TestCase):
+    def test_receipt_samples_use_each_forks_calibrated_batch_size(self) -> None:
+        receipt = {
+            "receipt_id": "varying-batches",
+            "sampling": {
+                "batch_sizes": [1, 2],
+                "durations_ns": [
+                    [100_000_000, 110_000_000],
+                    [200_000_000, 220_000_000],
+                ],
+            },
+        }
+
+        self.assertEqual(
+            court.per_operation_samples(receipt),
+            [
+                [100_000_000, 110_000_000],
+                [100_000_000, 110_000_000],
+            ],
+        )
+
     def test_all_schemas_are_valid_draft_2020_12(self) -> None:
         for name in (
             "court-plan.schema.json",

@@ -31,10 +31,10 @@ class GraKeLBenchmarkWorkerSuite(unittest.TestCase):
             "expected_output": row["expected_output"],
         }
 
-    def test_standard_batching_targets_100_ms_without_batching_boundary(
+    def test_standard_batching_targets_120_ms_without_batching_boundary(
         self,
     ) -> None:
-        self.assertEqual(benchmark_worker.choose_batch_size(1_000_000, "warm"), 100)
+        self.assertEqual(benchmark_worker.choose_batch_size(1_000_000, "warm"), 120)
         self.assertEqual(
             benchmark_worker.choose_batch_size(99_000_000, "warm"),
             2,

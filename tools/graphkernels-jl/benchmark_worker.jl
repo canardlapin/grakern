@@ -9,7 +9,7 @@ using Statistics
 
 const REPOSITORY = normpath(joinpath(@__DIR__, "..", ".."))
 const REVISION = "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
-const TARGET_SAMPLE_NS = 100_000_000
+const TARGET_SAMPLE_NS = 120_000_000
 const MAX_BATCH_SIZE = 100_000
 const THREAD_ENVIRONMENT = [
     "GRAKERN_COURT_APPLICATION_THREADS",
@@ -239,6 +239,10 @@ function run_worker(payload::Dict{String, Any})
     last_matrix = Matrix{Float64}(undef, 0, 0)
     last_rows = String[]
     last_columns = String[]
+    for _ in 1:Int(contract["warmups"])
+        last_matrix, _, last_rows, last_columns = evaluate_once(context)
+    end
+
     batch_size = 1
     if mode != "cold"
         calibration_started = time_ns()
@@ -246,9 +250,6 @@ function run_worker(payload::Dict{String, Any})
             evaluate_once(context)
         calibration_ns = Int(time_ns() - calibration_started)
         batch_size = choose_batch_size(calibration_ns, mode)
-    end
-    for _ in 1:Int(contract["warmups"])
-        last_matrix, _, last_rows, last_columns = evaluate_once(context)
     end
 
     durations = Int[]

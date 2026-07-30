@@ -1254,10 +1254,7 @@ def aggregate_workers(
         if observed:
             semantic[field] = max(observed)
     sampling_values = [worker["sampling"] for worker in workers]
-    batch_sizes = {sampling["batch_size"] for sampling in sampling_values}
-    if len(batch_sizes) != 1:
-        raise CourtError(f"batch size changed across forks for {job['id']}")
-    batch_size = next(iter(batch_sizes))
+    batch_sizes = [sampling["batch_size"] for sampling in sampling_values]
     if contract["mode"] == "cold":
         durations = [
             [
@@ -1271,7 +1268,11 @@ def aggregate_workers(
     timed_work = sum(duration for fork in durations for duration in fork)
     if contract["mode"] == "warm" and timed_work < 30_000_000_000:
         raise CourtError(f"worker timed work below 30 seconds for {job['id']}")
-    per_operation = [duration / batch_size for fork in durations for duration in fork]
+    per_operation = [
+        duration / batch_size
+        for fork, batch_size in zip(durations, batch_sizes, strict=True)
+        for duration in fork
+    ]
     metrics_values = [worker["metrics"] for worker in workers]
     phase_names = set(metrics_values[0]["phases"])
     if any(set(metrics["phases"]) != phase_names for metrics in metrics_values):
@@ -1361,7 +1362,7 @@ def aggregate_workers(
                 "forks": contract["forks"],
                 "warmups_per_fork": contract["warmups"],
                 "samples_per_fork": contract["samples"],
-                "batch_size": batch_size,
+                "batch_sizes": batch_sizes,
                 "timed_work_ns": timed_work,
                 "execution_order_seed": execution_order_seed,
                 "execution_order_sha256": execution_order_sha256,
@@ -1817,10 +1818,16 @@ def build_receipt_draft(
 
 
 def per_operation_samples(receipt: dict[str, Any]) -> list[list[float]]:
-    batch = receipt["sampling"]["batch_size"]
+    durations = receipt["sampling"]["durations_ns"]
+    batch_sizes = receipt["sampling"]["batch_sizes"]
+    if len(durations) != len(batch_sizes):
+        raise CourtError(
+            f"receipt {receipt['receipt_id']} has mismatched fork durations "
+            "and batch sizes"
+        )
     return [
         [duration / batch for duration in fork]
-        for fork in receipt["sampling"]["durations_ns"]
+        for fork, batch in zip(durations, batch_sizes, strict=True)
     ]
 
 

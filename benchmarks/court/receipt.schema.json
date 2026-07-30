@@ -590,7 +590,7 @@
         "forks",
         "warmups_per_fork",
         "samples_per_fork",
-        "batch_size",
+        "batch_sizes",
         "timed_work_ns",
         "execution_order_seed",
         "execution_order_sha256",
@@ -612,8 +612,12 @@
         "samples_per_fork": {
           "$ref": "#/$defs/positiveInteger"
         },
-        "batch_size": {
-          "$ref": "#/$defs/positiveInteger"
+        "batch_sizes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/positiveInteger"
+          },
+          "minItems": 1
         },
         "timed_work_ns": {
           "$ref": "#/$defs/positiveInteger"

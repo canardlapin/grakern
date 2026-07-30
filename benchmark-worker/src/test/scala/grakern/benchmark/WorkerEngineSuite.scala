@@ -6,8 +6,8 @@ import java.nio.file.{Files, Path}
 import munit.FunSuite
 
 final class WorkerEngineSuite extends FunSuite:
-  test("standard batching targets 100 ms without batching 100 ms operations") {
-    assertEquals(WorkerEngine.chooseBatchSize(1_000_000L), 100)
+  test("standard batching targets 120 ms without batching 100 ms operations") {
+    assertEquals(WorkerEngine.chooseBatchSize(1_000_000L), 120)
     assertEquals(WorkerEngine.chooseBatchSize(99_000_000L), 2)
     assertEquals(WorkerEngine.chooseBatchSize(100_000_000L), 1)
   }

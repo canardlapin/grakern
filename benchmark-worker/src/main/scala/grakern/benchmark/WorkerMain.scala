@@ -135,7 +135,7 @@ final private[benchmark] case class OperationContext(
 )
 
 private[benchmark] object WorkerEngine:
-  private val TargetSampleNanos = 100_000_000L
+  private val TargetSampleNanos = 120_000_000L
   private val MaximumBatchSize = 100_000
   private val ThreadEnvironment =
     Set(
@@ -191,16 +191,6 @@ private[benchmark] object WorkerEngine:
     val payload = context.payload
     val contract = payload.sampling_contract
     val runtimeBaseline = rssBytes()
-    val batchSize =
-      if contract.mode == "cold" then 1
-      else
-        val calibrationStarted = System.nanoTime()
-        operation(context).map(_ => ()) match
-          case Left(error) => return Left(error)
-          case Right(_)    => ()
-        chooseBatchSize(
-          System.nanoTime() - calibrationStarted
-        )
 
     var last: Option[OperationResult] = None
     var warmup = 0
@@ -209,6 +199,18 @@ private[benchmark] object WorkerEngine:
         case Left(error)   => return Left(error)
         case Right(result) => last = Some(result)
       warmup += 1
+
+    val batchSize =
+      if contract.mode == "cold" then 1
+      else
+        val calibrationStarted = System.nanoTime()
+        operation(context) match
+          case Left(error)   => return Left(error)
+          case Right(result) =>
+            last = Some(result)
+        chooseBatchSize(
+          System.nanoTime() - calibrationStarted
+        )
 
     val durations = Vector.newBuilder[Long]
     val phaseSamples =

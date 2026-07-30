@@ -136,13 +136,16 @@ The initial sampling contract is:
 - a calibrated inner batch only when one operation is shorter than 100 ms;
 - at least 30 seconds of timed work for each implementation and row.
 
-Each fresh worker process performs one untimed calibration operation before
-its warmups and fixes that fork's batch count before sampling. When calibration
-is shorter than 100 ms, the batch targets at least 100 ms; otherwise the batch
-is one. Combined with 30 samples across 10 forks, the standard policy targets
-at least 30 seconds of timed work without batching an operation at or above
-100 ms. The runner still verifies the evidence floor from the recorded
-durations and fails closed if timing variation leaves it short.
+Each fresh worker process performs its warmups, then one untimed calibration
+operation, and fixes that fork's batch count before sampling. Batch counts may
+differ across forks because calibration is process-local; receipts retain one
+batch count per fork and normalize each raw sample with its own count. When
+calibration is shorter than 100 ms, the batch targets at least 120 ms;
+otherwise the batch is one. Combined with 30 samples across 10 forks, the
+standard policy targets at least 30 seconds of timed work without batching an
+operation at or above 100 ms, with margin for ordinary timing variation. The
+runner still verifies the evidence floor from the recorded durations and fails
+closed if timing variation leaves it short.
 
 The court runner launches one fresh worker process per fork and rotates
 implementation position deterministically within each row, boundary, and
