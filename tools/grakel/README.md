@@ -52,3 +52,17 @@ uv run \
   -p 'test_benchmark_worker.py' \
   -v
 ```
+
+Championship workers use the dedicated environment described by
+`performance-requirements.txt`; the lock includes hashes for every resolved
+distribution. Regenerate it deliberately with:
+
+```bash
+uv pip compile \
+  tools/grakel/performance-requirements.in \
+  --python-version 3.11 \
+  --python-platform aarch64-apple-darwin \
+  --generate-hashes \
+  --no-header \
+  --output-file tools/grakel/performance-requirements.txt
+```

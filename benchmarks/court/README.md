@@ -99,6 +99,51 @@ Grakern and every eligible comparator. It must also contain the cold public
 end-to-end jobs. A diagnostic subset can exercise fewer jobs, but the runner
 accepts it only with `--diagnostic` and its receipts remain inadmissible.
 
+Build the worker runtimes before generating a real plan. GraKeL runs from a
+dedicated Python 3.11 environment synchronized to hash-locked requirements;
+this keeps environment resolution outside every measured process boundary.
+
+```bash
+sbt benchmarkWorker/assembly
+
+uv venv --python 3.11 /tmp/grakern-grakel-3.11
+uv pip sync \
+  --python /tmp/grakern-grakel-3.11/bin/python \
+  tools/grakel/performance-requirements.txt
+
+JULIA_DEPOT_PATH=/tmp/grakern-graphkernels-julia \
+  julia --project=tools/graphkernels-jl \
+  -e 'using Pkg; Pkg.instantiate()'
+```
+
+Generate the complete 72-job championship card outside the source checkout:
+
+```bash
+uv run --with jsonschema \
+  python benchmarks/court/generate_plan.py \
+  --output /tmp/grakern-tier1-plan.json
+```
+
+For a worker and scheduling smoke test, generate an explicitly inadmissible
+subset:
+
+```bash
+uv run --with jsonschema \
+  python benchmarks/court/generate_plan.py \
+  --coverage-mode diagnostic_subset \
+  --court-id grakern-wl-smoke \
+  --tier1-id t1-wl-subtree-mutag \
+  --boundary prepared_topology \
+  --mode warm \
+  --output /tmp/grakern-wl-smoke.json
+```
+
+The generator discovers clean Graph4s and Gale checkouts at the immutable
+revisions pinned by `build.sbt`, including sbt's staged source dependencies.
+Use `--graph4s-source` or `--gale-source` only to select another checkout at
+the same revision. Receipts therefore record Graph4s and Gale as separate
+source components rather than merely repeating Grakern's pin.
+
 The command must contain `{job_json}` and `{worker_result_json}` placeholders.
 The runner replaces them with absolute paths. It invokes each command in a
 fresh process for every required fork, directly and without a shell. Within
@@ -114,8 +159,8 @@ For example, worker commands may have these shapes:
 ```
 
 ```json
-["uv", "run", "--python", "3.11",
- "tools/grakel/benchmark_worker.py",
+["/tmp/grakern-grakel-3.11/bin/python",
+ "/source/grakern/tools/grakel/benchmark_worker.py",
  "--job", "{job_json}", "--output", "{worker_result_json}"]
 ```
 
