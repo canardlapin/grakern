@@ -152,10 +152,13 @@ implementation position deterministically within each row, boundary, and
 mode. The receipt stores the execution-order seed and schedule digest together
 with every raw duration and its fork and batch membership.
 
-The court may reduce the sample count for a row whose single operation exceeds
-two seconds, but it still requires at least five forks, five samples per fork,
-10 warmup operations per fork, and 30 seconds of timed work. The receipt must
-record that expensive-row policy.
+The court may reduce the sample count for an implementation whose single
+operation on a row exceeds two seconds, but it still requires at least five
+forks, five samples per fork, 10 warmup operations per fork, and 30 seconds of
+timed work. Faster implementations in the same race group retain the standard
+contract. The runner rotates all active implementations for the first five
+forks, then continues a balanced rotation among implementations with remaining
+forks. Each receipt records its own policy and execution-order digest.
 
 A cold receipt uses exactly 10 independent process forks, one complete
 operation per fork, no warmup, and no inner batching.

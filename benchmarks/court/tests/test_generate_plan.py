@@ -43,6 +43,7 @@ class PerformancePlanSuite(unittest.TestCase):
             "modes": None,
             "implementations": None,
             "expensive_rows": set(),
+            "expensive_jobs": set(),
             "timeout_seconds": 1800,
             "java": Path("/runtime/java"),
             "grakel_python": Path("/runtime/python"),
@@ -166,6 +167,34 @@ class PerformancePlanSuite(unittest.TestCase):
             )
         )
 
+    def test_expensive_job_does_not_reduce_faster_comparators(self) -> None:
+        plan = self.plan(
+            expensive_jobs={
+                ("t1-shortest-path-sparse", "graphkernels_jl"),
+            },
+        )
+        jobs = [
+            job
+            for job in plan["jobs"]
+            if job["tier1_id"] == "t1-shortest-path-sparse"
+            and job["mode"] == "warm"
+        ]
+
+        self.assertTrue(
+            all(
+                job["sampling_policy"] == "expensive_row"
+                for job in jobs
+                if job["implementation"] == "graphkernels_jl"
+            )
+        )
+        self.assertTrue(
+            all(
+                job["sampling_policy"] == "standard"
+                for job in jobs
+                if job["implementation"] != "graphkernels_jl"
+            )
+        )
+
     def test_executable_keeps_virtual_environment_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -193,6 +222,27 @@ class PerformancePlanSuite(unittest.TestCase):
             "unknown expensive rows",
         ):
             self.plan(expensive_rows={"not-a-tier1-row"})
+
+    def test_unknown_expensive_job_fails_closed(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError,
+            "unknown expensive jobs",
+        ):
+            self.plan(
+                expensive_jobs={
+                    ("t1-wl-subtree-mutag", "graphkernels_jl"),
+                }
+            )
+
+    def test_expensive_job_cli_parser_is_strict(self) -> None:
+        self.assertEqual(
+            generator.parse_expensive_jobs(
+                ["t1-shortest-path-sparse:graphkernels_jl"]
+            ),
+            {("t1-shortest-path-sparse", "graphkernels_jl")},
+        )
+        with self.assertRaisesRegex(ValueError, "invalid expensive job"):
+            generator.parse_expensive_jobs(["missing-separator"])
 
 
 if __name__ == "__main__":

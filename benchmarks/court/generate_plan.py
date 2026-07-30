@@ -301,6 +301,7 @@ def build_plan(
     modes: Iterable[str] | None,
     implementations: set[str] | None,
     expensive_rows: set[str],
+    expensive_jobs: set[tuple[str, str]],
     timeout_seconds: int,
     java: Path,
     grakel_python: Path,
@@ -317,6 +318,20 @@ def build_plan(
         raise ValueError(
             "unknown expensive rows: "
             + ", ".join(sorted(unknown_expensive))
+        )
+    eligible_jobs = {
+        (row["id"], implementation)
+        for row in tier1["rows"]
+        for implementation in ["grakern", *row["comparators"]]
+    }
+    unknown_expensive_jobs = expensive_jobs - eligible_jobs
+    if unknown_expensive_jobs:
+        raise ValueError(
+            "unknown expensive jobs: "
+            + ", ".join(
+                f"{row}:{implementation}"
+                for row, implementation in sorted(unknown_expensive_jobs)
+            )
         )
     if coverage_mode == "championship" and any(
         value is not None
@@ -360,7 +375,11 @@ def build_plan(
                 )
                 policy = (
                     "expensive_row"
-                    if mode == "warm" and row["id"] in expensive_rows
+                    if mode == "warm"
+                    and (
+                        row["id"] in expensive_rows
+                        or (row["id"], implementation) in expensive_jobs
+                    )
                     else "standard"
                 )
                 job: dict[str, Any] = {
@@ -510,6 +529,16 @@ def parse_arguments() -> argparse.Namespace:
         choices=tuple(IMPLEMENTATION_LANGUAGE),
     )
     parser.add_argument("--expensive-row", action="append", default=[])
+    parser.add_argument(
+        "--expensive-job",
+        action="append",
+        default=[],
+        metavar="TIER1_ID:IMPLEMENTATION",
+        help=(
+            "apply the five-fork expensive policy only to one implementation; "
+            "repeat for additional jobs"
+        ),
+    )
     parser.add_argument("--timeout-seconds", type=int, default=1800)
     parser.add_argument("--repository", type=Path, default=REPOSITORY)
     parser.add_argument("--java")
@@ -526,6 +555,24 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--graph4s-source", type=Path)
     parser.add_argument("--gale-source", type=Path)
     return parser.parse_args()
+
+
+def parse_expensive_jobs(values: Iterable[str]) -> set[tuple[str, str]]:
+    result: set[tuple[str, str]] = set()
+    for value in values:
+        row, separator, implementation = value.partition(":")
+        if (
+            not separator
+            or not row
+            or implementation not in IMPLEMENTATION_LANGUAGE
+        ):
+            raise ValueError(
+                "invalid expensive job "
+                f"{value!r}; expected TIER1_ID:"
+                + "|".join(IMPLEMENTATION_LANGUAGE)
+            )
+        result.add((row, implementation))
+    return result
 
 
 def main() -> int:
@@ -548,6 +595,7 @@ def main() -> int:
             else None
         ),
         expensive_rows=set(arguments.expensive_row),
+        expensive_jobs=parse_expensive_jobs(arguments.expensive_job),
         timeout_seconds=arguments.timeout_seconds,
         java=executable(arguments.java, "java"),
         grakel_python=executable(arguments.grakel_python, "python3"),

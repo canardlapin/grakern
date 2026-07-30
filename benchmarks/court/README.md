@@ -204,6 +204,12 @@ evidence floor with timing margin, which the runner also checks from the raw
 durations. Because calibration is process-local, the receipt retains each
 fork's batch size and normalizes that fork's samples independently.
 
+For an implementation whose complete operation exceeds two seconds, a plan may
+select `expensive_row` for that job alone. It then receives five forks and five
+samples per fork while faster comparators retain the standard 10-by-30
+contract. The shared schedule rotates every currently active implementation;
+the 30-second timed-work floor is enforced independently for every receipt.
+
 For cold forks, the receipt uses the runner-observed duration from process
 launch through successful exit. This includes runtime startup and worker
 verification overhead. Cold latency is reported separately and never decides

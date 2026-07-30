@@ -791,12 +791,6 @@ def validate_plan_references(
             raise CourtError(
                 f"championship plan misses {len(missing)} jobs: {rendered}"
             )
-    for group, jobs in race_groups(plan).items():
-        policies = {job["sampling_policy"] for job in jobs}
-        if len(policies) != 1:
-            raise CourtError(
-                "race group has inconsistent sampling policies: " + "/".join(group)
-            )
 
 
 def race_group_key(job: dict[str, Any]) -> tuple[str, str, str]:
@@ -849,11 +843,10 @@ def rotating_schedule(
 ) -> list[list[dict[str, Any]]]:
     if not jobs:
         raise CourtError("cannot schedule an empty race group")
-    contracts = [sampling_contract(job) for job in jobs]
-    if any(contract != contracts[0] for contract in contracts[1:]):
-        raise CourtError(
-            "race group has incompatible sampling contracts: " + "/".join(group)
-        )
+    contracts = {
+        job["id"]: sampling_contract(job)
+        for job in jobs
+    }
     seed_material = canonical_json_bytes(
         {
             "seed": seed,
@@ -867,11 +860,17 @@ def rotating_schedule(
     )
     base = list(jobs)
     random.Random(group_seed).shuffle(base)
-    return [
-        base[offset:] + base[:offset]
-        for fork_index in range(contracts[0]["forks"])
-        for offset in [fork_index % len(base)]
-    ]
+    schedule: list[list[dict[str, Any]]] = []
+    maximum_forks = max(contract["forks"] for contract in contracts.values())
+    for fork_index in range(maximum_forks):
+        active = [
+            job
+            for job in base
+            if contracts[job["id"]]["forks"] > fork_index
+        ]
+        offset = fork_index % len(active)
+        schedule.append(active[offset:] + active[:offset])
+    return schedule
 
 
 def schedule_sha256(
@@ -1454,6 +1453,7 @@ def aggregate_worker_artifacts(
     job_directory: Path,
     invocations: Sequence[dict[str, Any]],
     worker: dict[str, Any],
+    schedule: Sequence[Sequence[dict[str, Any]]],
 ) -> dict[str, Path]:
     aggregate_directory = job_directory / "aggregate"
     aggregate_directory.mkdir(parents=True, exist_ok=True)
@@ -1461,16 +1461,28 @@ def aggregate_worker_artifacts(
     worker_result_json = aggregate_directory / "worker-result.json"
     stdout_path = aggregate_directory / "stdout.log"
     stderr_path = aggregate_directory / "stderr.log"
+    rendered_schedule = [
+        [candidate["implementation"] for candidate in fork]
+        for fork in schedule
+    ]
     observed_order_sha256 = sha256_bytes(
-        canonical_json_bytes([invocation["order"] for invocation in invocations])
+        canonical_json_bytes(rendered_schedule)
     )
     if observed_order_sha256 != worker["sampling"]["execution_order_sha256"]:
         raise CourtError(f"execution order artifact mismatch for {job['id']}")
+    for invocation in invocations:
+        expected_order = rendered_schedule[invocation["fork_index"]]
+        if invocation["order"] != expected_order:
+            raise CourtError(
+                f"fork order artifact mismatch for {job['id']} "
+                f"fork {invocation['fork_index']}"
+            )
     manifest = {
         "schema_version": "grakern.performance-invocation-manifest.v1",
         "job_id": job["id"],
         "execution_order_seed": worker["sampling"]["execution_order_seed"],
         "execution_order_sha256": worker["sampling"]["execution_order_sha256"],
+        "group_schedule": rendered_schedule,
         "invocations": [
             {
                 "fork_index": invocation["fork_index"],
@@ -2374,6 +2386,7 @@ def run_court(
                     output_root / "jobs" / job["id"],
                     invocations,
                     worker,
+                    schedule,
                 )
                 host, aggregated_host_checks = aggregate_host_evidence(invocations)
                 invocation_checks = {

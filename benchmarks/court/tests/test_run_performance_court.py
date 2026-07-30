@@ -289,6 +289,62 @@ class CourtContractSuite(unittest.TestCase):
         for counts in positions.values():
             self.assertLessEqual(max(counts) - min(counts), 1)
 
+    def test_rotating_schedule_supports_per_implementation_expensive_policy(
+        self,
+    ) -> None:
+        jobs = [
+            {
+                "id": implementation,
+                "implementation": implementation,
+                "mode": "warm",
+                "sampling_policy": (
+                    "expensive_row"
+                    if implementation == "graphkernels_jl"
+                    else "standard"
+                ),
+            }
+            for implementation in (
+                "grakern",
+                "grakel",
+                "graphkernels_jl",
+            )
+        ]
+
+        schedule = court.rotating_schedule(
+            jobs,
+            ("row", "public_end_to_end", "warm"),
+            17,
+        )
+        appearances = {
+            implementation: sum(
+                job["implementation"] == implementation
+                for fork in schedule
+                for job in fork
+            )
+            for implementation in (
+                "grakern",
+                "grakel",
+                "graphkernels_jl",
+            )
+        }
+
+        self.assertEqual(len(schedule), 10)
+        self.assertEqual(appearances["grakern"], 10)
+        self.assertEqual(appearances["grakel"], 10)
+        self.assertEqual(appearances["graphkernels_jl"], 5)
+        self.assertTrue(
+            all(
+                any(job["implementation"] == "graphkernels_jl" for job in fork)
+                for fork in schedule[:5]
+            )
+        )
+        self.assertTrue(
+            all(
+                all(job["implementation"] != "graphkernels_jl" for job in fork)
+                for fork in schedule[5:]
+            )
+        )
+
     def test_cold_receipt_uses_runner_observed_process_latency(
         self,
     ) -> None:
@@ -365,8 +421,13 @@ import sys
 
 job_path, result_path = sys.argv[1:3]
 job = json.load(open(job_path, encoding="utf-8"))
-duration = 100_000_000
-durations = [duration for _ in range(30)]
+contract = job["sampling_contract"]
+duration = (
+    1_200_000_000
+    if contract["policy"] == "expensive_row"
+    else 100_000_000
+)
+durations = [duration for _ in range(contract["samples"])]
 checksum = "a" * 64
 result = {
     "schema_version": "grakern.performance-worker-result.v1",
@@ -398,10 +459,10 @@ result = {
     },
     "sampling": {
         "mode": "warm",
-        "policy": "standard",
+        "policy": contract["policy"],
         "fork_index": job["execution"]["fork_index"],
-        "warmups": 10,
-        "samples": 30,
+        "warmups": contract["warmups"],
+        "samples": contract["samples"],
         "batch_size": 1,
         "timed_work_ns": sum(durations),
         "durations_ns": durations
@@ -529,7 +590,7 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                             "tier1_id": "fixture-row",
                             "boundary": "public_end_to_end",
                             "mode": "warm",
-                            "sampling_policy": "standard",
+                            "sampling_policy": "expensive_row",
                             "implementation": "grakern",
                             "language": "scala-jvm",
                             "version": platform.python_version(),
@@ -638,14 +699,25 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                     )
                     for candidate in receipts
                 }
-                for fork_index in range(10):
-                    records = [
-                        (
-                            implementation,
-                            manifest["invocations"][fork_index],
+                schedules = {
+                    json.dumps(manifest["group_schedule"])
+                    for manifest in manifests.values()
+                }
+                self.assertEqual(len(schedules), 1)
+                group_schedule = next(iter(manifests.values()))["group_schedule"]
+                for fork_index, declared_order in enumerate(group_schedule):
+                    records = []
+                    for implementation, manifest in manifests.items():
+                        invocation = next(
+                            (
+                                candidate
+                                for candidate in manifest["invocations"]
+                                if candidate["fork_index"] == fork_index
+                            ),
+                            None,
                         )
-                        for implementation, manifest in manifests.items()
-                    ]
+                        if invocation is not None:
+                            records.append((implementation, invocation))
                     actual_order = [
                         implementation
                         for implementation, _ in sorted(
@@ -653,7 +725,6 @@ json.dump(result, open(result_path, "w", encoding="utf-8"))
                             key=lambda item: item[1]["process"]["started_monotonic_ns"],
                         )
                     ]
-                    declared_order = records[0][1]["order"]
                     self.assertEqual(actual_order, declared_order)
                 raw_samples = output / receipt["artifacts"]["raw_samples"]["path"]
                 original_raw_samples = raw_samples.read_bytes()
