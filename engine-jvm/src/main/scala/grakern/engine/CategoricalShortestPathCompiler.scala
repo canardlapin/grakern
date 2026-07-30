@@ -178,7 +178,6 @@ private object CategoricalShortestPathCompiler:
           .gram(
             features.matrix,
             features.rows,
-            CategoricalShortestPathFeatures.sameFeature,
             plan.options.gramExecution
           )
           .left

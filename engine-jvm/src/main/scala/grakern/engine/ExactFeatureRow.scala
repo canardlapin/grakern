@@ -19,14 +19,9 @@ final private[grakern] case class ExactFeatureRow[K](
       keyHash: K => Int,
       sameKey: (K, K) => Boolean
   ): Double =
-    val index =
-      ExactFeatureRow.Indexed(that.entries, keyHash)
-    entries.iterator.map { case (key, value) =>
-      index
-        .find(key, sameKey)
-        .map(amount => value * amount)
-        .getOrElse(0.0)
-    }.sum
+    ExactFeatureRow
+      .Indexed(that.entries, keyHash)
+      .dot(this, sameKey)
 
   def scaled(factor: Double): ExactFeatureRow[K] =
     ExactFeatureRow(
@@ -41,44 +36,116 @@ final private[grakern] case class ExactFeatureRow[K](
 
 private[grakern] object ExactFeatureRow:
   final class Indexed[K] private (
-      entries: Vector[(K, Double)],
-      buckets: Map[Int, Vector[Int]],
+      private[engine] val keys: Array[Any],
+      private[engine] val values: Array[Double],
+      private[engine] val hashes: Array[Int],
+      table: Array[Int],
       keyHash: K => Int
   ):
     def find(
         key: K,
         sameKey: (K, K) => Boolean
     ): Option[Double] =
-      buckets
-        .getOrElse(keyHash(key), Vector.empty)
-        .collectFirst {
-          case index if sameKey(key, entries(index)._1) =>
-            entries(index)._2
-        }
+      findIndex(key, keyHash(key), sameKey) match
+        case index if index >= 0 => Some(values(index))
+        case _                   => None
 
     def dot(
         left: ExactFeatureRow[K],
         sameKey: (K, K) => Boolean
     ): Double =
-      left.entries.iterator.map { case (key, value) =>
-        find(key, sameKey)
-          .map(amount => value * amount)
-          .getOrElse(0.0)
-      }.sum
+      var index = 0
+      var result = 0.0
+      while index < left.entries.size do
+        val entry = left.entries(index)
+        result += entry._2 *
+          valueOrZero(
+            entry._1,
+            keyHash(entry._1),
+            sameKey
+          )
+        index += 1
+      result
+
+    def dot(
+        left: Indexed[K],
+        sameKey: (K, K) => Boolean
+    ): Double =
+      var index = 0
+      var result = 0.0
+      while index < left.keys.length do
+        result += left.values(index) *
+          valueOrZero(
+            left.keys(index).asInstanceOf[K],
+            left.hashes(index),
+            sameKey
+          )
+        index += 1
+      result
+
+    private def valueOrZero(
+        key: K,
+        hash: Int,
+        sameKey: (K, K) => Boolean
+    ): Double =
+      val index = findIndex(key, hash, sameKey)
+      if index < 0 then 0.0 else values(index)
+
+    private def findIndex(
+        key: K,
+        hash: Int,
+        sameKey: (K, K) => Boolean
+    ): Int =
+      val mask = table.length - 1
+      var slot = spread(hash) & mask
+      var candidate = table(slot)
+      while candidate >= 0 do
+        if hashes(candidate) == hash &&
+          sameKey(
+            key,
+            keys(candidate).asInstanceOf[K]
+          )
+        then return candidate
+        slot = (slot + 1) & mask
+        candidate = table(slot)
+      -1
 
   object Indexed:
     def apply[K](
         entries: Vector[(K, Double)],
         keyHash: K => Int
     ): Indexed[K] =
-      val buckets =
-        entries.indices.foldLeft(
-          Map.empty[Int, Vector[Int]]
-        ) { (current, index) =>
-          val hash = keyHash(entries(index)._1)
-          current.updated(
-            hash,
-            current.getOrElse(hash, Vector.empty) :+ index
-          )
-        }
-      new Indexed(entries, buckets, keyHash)
+      val keys = new Array[Any](entries.size)
+      val values = new Array[Double](entries.size)
+      val hashes = new Array[Int](entries.size)
+      val table =
+        Array.fill(tableSize(entries.size))(-1)
+      val mask = table.length - 1
+      var index = 0
+      while index < entries.size do
+        val entry = entries(index)
+        val hash = keyHash(entry._1)
+        keys(index) = entry._1
+        values(index) = entry._2
+        hashes(index) = hash
+        var slot = spread(hash) & mask
+        while table(slot) >= 0 do slot = (slot + 1) & mask
+        table(slot) = index
+        index += 1
+      new Indexed(
+        keys,
+        values,
+        hashes,
+        table,
+        keyHash
+      )
+
+    private def tableSize(entries: Int): Int =
+      val target =
+        math.max(2L, entries.toLong * 2L)
+      var size = 2
+      while size.toLong < target do size = size << 1
+      size
+
+  private def spread(hash: Int): Int =
+    hash ^ (hash >>> 16)

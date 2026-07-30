@@ -192,7 +192,6 @@ object HistogramCompiler:
               .gram(
                 features,
                 completed,
-                sameFeature,
                 gramExecution
               )
               .left

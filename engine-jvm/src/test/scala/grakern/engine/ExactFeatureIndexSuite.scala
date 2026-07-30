@@ -59,8 +59,6 @@ final class ExactFeatureIndexSuite extends FunSuite:
         .gram(
           features,
           rows,
-          constantHash,
-          sameKey,
           GramExecution.Sequential
         )
         .toOption

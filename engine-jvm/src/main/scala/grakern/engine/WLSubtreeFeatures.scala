@@ -2,6 +2,7 @@ package grakern.engine
 
 import grakern.core.*
 import grakern.standard.wl.*
+import scala.collection.mutable
 
 final case class WLSubtreeFeature(
     round: Int,
@@ -21,8 +22,11 @@ final class WLSubtreeFeatures[V] private[engine] (
     private[grakern] val rows: Vector[
       ExactFeatureRow[WLSubtreeFeature]
     ],
-    val provenance: Vector[WLSubtreeProvenance[V]]
+    provenanceThunk: () => Vector[WLSubtreeProvenance[V]]
 ):
+  lazy val provenance: Vector[WLSubtreeProvenance[V]] =
+    provenanceThunk()
+
   def graphCount: Int = rows.size
 
   def activeCoordinates(graphIndex: Int): Option[Int] =
@@ -51,44 +55,54 @@ private[grakern] object WLSubtreeFeatures:
         )
       )
     else
+      val counts =
+        new Array[Int](trace.signatureCount)
+      val coloursByIndex =
+        new Array[AnyRef](trace.signatureCount)
+      val touched =
+        mutable.ArrayBuffer.empty[Int]
       val rows =
         Vector.tabulate(trace.sampleKeys.size) { graphIndex =>
           val entries = Vector.newBuilder[(WLSubtreeFeature, Double)]
-          (0 to trace.rounds).foreach { round =>
+          var round = 0
+          while round <= trace.rounds do
             val scale = math.sqrt(roundWeights(round).toDouble)
             if scale > 0.0 then
+              touched.clear()
               val colours =
-                trace
-                  .graphColours(graphIndex, round)
-                  .getOrElse(Vector.empty)
-              val counts =
-                colours.foldLeft(Vector.empty[(WLColour, Int)]) { (current, colour) =>
-                  val index =
-                    current.indexWhere { case (candidate, _) =>
-                      candidate.equals(colour)
-                    }
-                  if index < 0 then current :+ (colour -> 1)
-                  else
-                    current.updated(
-                      index,
-                      colour -> (current(index)._2 + 1)
-                    )
-                }
-              counts.foreach { case (colour, count) =>
+                trace.levels(round)
+              val range =
+                trace.graphRanges(graphIndex)
+              var vertexIndex = range.start
+              while vertexIndex < range.end do
+                val colourIndex =
+                  colours(vertexIndex).index
+                if counts(colourIndex) == 0 then
+                  touched += colourIndex
+                  coloursByIndex(colourIndex) = colours(vertexIndex)
+                counts(colourIndex) += 1
+                vertexIndex += 1
+              var touchedIndex = 0
+              while touchedIndex < touched.size do
+                val colourIndex =
+                  touched(touchedIndex)
                 entries +=
-                  WLSubtreeFeature(round, colour) ->
-                    (scale * count.toDouble)
-              }
-          }
+                  WLSubtreeFeature(
+                    round,
+                    coloursByIndex(colourIndex)
+                      .asInstanceOf[WLColour]
+                  ) ->
+                    (scale * counts(colourIndex).toDouble)
+                counts(colourIndex) = 0
+                touchedIndex += 1
+            round += 1
           ExactFeatureRow(entries.result())
         }
-      val provenance =
-        buildProvenance(trace)
       Right(
         new WLSubtreeFeatures(
           trace.refinementNodeId,
           rows,
-          provenance
+          () => buildProvenance(trace)
         )
       )
 
@@ -110,29 +124,43 @@ private[grakern] object WLSubtreeFeatures:
   private def buildProvenance[V, NodeKey, EdgeKey](
       trace: WLTrace[V, NodeKey, EdgeKey]
   ): Vector[WLSubtreeProvenance[V]] =
-    var result = Vector.empty[WLSubtreeProvenance[V]]
-    (0 to trace.rounds).foreach { round =>
-      (0 until trace.vertexCount).foreach { vertexIndex =>
-        val occurrence =
-          trace.occurrence(round, vertexIndex).get
+    val features =
+      new Array[AnyRef](trace.signatureCount)
+    val occurrences =
+      new Array[AnyRef](trace.signatureCount)
+    val order =
+      mutable.ArrayBuffer.empty[Int]
+    var round = 0
+    while round <= trace.rounds do
+      var vertexIndex = 0
+      while vertexIndex < trace.vertexCount do
+        val colour =
+          trace.levels(round)(vertexIndex)
+        val colourIndex =
+          colour.index
         val feature =
-          WLSubtreeFeature(round, occurrence.colour)
-        val index =
-          result.indexWhere(value => sameFeature(value.feature, feature))
-        if index < 0 then
-          result = result :+
-            WLSubtreeProvenance(
-              feature,
-              Vector(occurrence.source)
-            )
-        else
-          val current = result(index)
-          result = result.updated(
-            index,
-            current.copy(
-              occurrences = current.occurrences :+ occurrence.source
-            )
-          )
-      }
-    }
-    result
+          WLSubtreeFeature(round, colour)
+        var sources =
+          occurrences(colourIndex)
+            .asInstanceOf[
+              mutable.ArrayBuffer[WLSource[V]]
+            ]
+        if sources == null then
+          sources = mutable.ArrayBuffer.empty[WLSource[V]]
+          features(colourIndex) = feature
+          occurrences(colourIndex) = sources
+          order += colourIndex
+        sources += trace.sources(vertexIndex)
+        vertexIndex += 1
+      round += 1
+    order.iterator.map { colourIndex =>
+      WLSubtreeProvenance(
+        features(colourIndex)
+          .asInstanceOf[WLSubtreeFeature],
+        occurrences(colourIndex)
+          .asInstanceOf[
+            mutable.ArrayBuffer[WLSource[V]]
+          ]
+          .toVector
+      )
+    }.toVector

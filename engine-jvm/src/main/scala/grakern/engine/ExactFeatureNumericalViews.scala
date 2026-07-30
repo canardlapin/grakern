@@ -23,36 +23,14 @@ private[grakern] object ExactFeatureNumericalViews:
   def gram[Coordinate, Metadata](
       features: FeatureMatrix[Coordinate, Metadata],
       rows: Vector[ExactFeatureRow[Coordinate]],
-      sameCoordinate: (
-          Coordinate,
-          Coordinate
-      ) => Boolean,
-      execution: GramExecution
-  ): Either[GramExecutionFailure, GramMatrix] =
-    gram(
-      features,
-      rows,
-      _ => 0,
-      sameCoordinate,
-      execution
-    )
-
-  def gram[Coordinate, Metadata](
-      features: FeatureMatrix[Coordinate, Metadata],
-      rows: Vector[ExactFeatureRow[Coordinate]],
-      coordinateHash: Coordinate => Int,
-      sameCoordinate: (
-          Coordinate,
-          Coordinate
-      ) => Boolean,
       execution: GramExecution
   ): Either[GramExecutionFailure, GramMatrix] =
     val size = rows.size
     val indexedRows =
-      rows.map(row =>
-        ExactFeatureRow.Indexed(
-          row.entries,
-          coordinateHash
+      rows.map(
+        NumericIndexedRow(
+          _,
+          features.columns
         )
       )
     val evaluated =
@@ -60,17 +38,16 @@ private[grakern] object ExactFeatureNumericalViews:
         case GramExecution.Sequential =>
           Right(
             evaluateRows(
-              rows,
+              features.columns.size,
               indexedRows,
-              sameCoordinate,
               0 until size
             )
           )
         case policy: GramExecution.DeterministicParallel =>
           evaluateParallel(
-            rows,
+            size,
+            features.columns.size,
             indexedRows,
-            sameCoordinate,
             policy
           )
     evaluated.map { cells =>
@@ -88,44 +65,38 @@ private[grakern] object ExactFeatureNumericalViews:
       value: Double
   )
 
-  private def evaluateRows[Coordinate](
-      rows: Vector[ExactFeatureRow[Coordinate]],
-      indexedRows: Vector[
-        ExactFeatureRow.Indexed[Coordinate]
-      ],
-      sameCoordinate: (
-          Coordinate,
-          Coordinate
-      ) => Boolean,
-      leftRows: Iterable[Int]
+  private def evaluateRows(
+      coordinateCount: Int,
+      indexedRows: Vector[NumericIndexedRow],
+      rightRows: Iterable[Int]
   ): Vector[GramCell] =
-    val size = rows.size
-    leftRows.iterator.flatMap { left =>
-      (left until size).iterator.map { right =>
-        GramCell(
-          left,
-          right,
-          indexedRows(right).dot(
-            rows(left),
-            sameCoordinate
+    val lookup =
+      new Array[Double](coordinateCount)
+    val result =
+      Vector.newBuilder[GramCell]
+    rightRows.foreach { right =>
+      indexedRows(right).writeTo(lookup)
+      var left = 0
+      while left <= right do
+        result +=
+          GramCell(
+            left,
+            right,
+            indexedRows(left).dot(lookup)
           )
-        )
-      }
-    }.toVector
+        left += 1
+      indexedRows(right).clearFrom(lookup)
+    }
+    result.result()
 
-  private def evaluateParallel[Coordinate](
-      rows: Vector[ExactFeatureRow[Coordinate]],
-      indexedRows: Vector[
-        ExactFeatureRow.Indexed[Coordinate]
-      ],
-      sameCoordinate: (
-          Coordinate,
-          Coordinate
-      ) => Boolean,
+  private def evaluateParallel(
+      size: Int,
+      coordinateCount: Int,
+      indexedRows: Vector[NumericIndexedRow],
       policy: GramExecution.DeterministicParallel
   ): Either[GramExecutionFailure, Vector[GramCell]] =
     val tiles =
-      (0 until rows.size)
+      (0 until size)
         .grouped(policy.tileRows)
         .map(_.toVector)
         .toVector
@@ -137,9 +108,8 @@ private[grakern] object ExactFeatureNumericalViews:
           new Callable[Vector[GramCell]]:
             def call(): Vector[GramCell] =
               evaluateRows(
-                rows,
+                coordinateCount,
                 indexedRows,
-                sameCoordinate,
                 tile
               )
         }
@@ -161,6 +131,53 @@ private[grakern] object ExactFeatureNumericalViews:
           )
         )
     finally executor.shutdown()
+
+  final private class NumericIndexedRow private (
+      val columns: Array[Int],
+      val values: Array[Double]
+  ):
+    def dot(lookup: Array[Double]): Double =
+      var index = 0
+      var result = 0.0
+      while index < columns.length do
+        result += values(index) *
+          lookup(columns(index))
+        index += 1
+      result
+
+    def writeTo(lookup: Array[Double]): Unit =
+      var index = 0
+      while index < columns.length do
+        lookup(columns(index)) = values(index)
+        index += 1
+
+    def clearFrom(lookup: Array[Double]): Unit =
+      var index = 0
+      while index < columns.length do
+        lookup(columns(index)) = 0.0
+        index += 1
+
+  private object NumericIndexedRow:
+    def apply[Coordinate](
+        row: ExactFeatureRow[Coordinate],
+        dictionary: FeatureDictionary[Coordinate]
+    ): NumericIndexedRow =
+      val columns =
+        new Array[Int](row.entries.size)
+      val values =
+        new Array[Double](row.entries.size)
+      var index = 0
+      while index < row.entries.size do
+        val entry = row.entries(index)
+        val column =
+          dictionary.indexOrNegative(entry._1)
+        columns(index) = column
+        values(index) = entry._2
+        index += 1
+      new NumericIndexedRow(
+        columns,
+        values
+      )
 
   def operator[Coordinate, Metadata](
       features: FeatureMatrix[Coordinate, Metadata]

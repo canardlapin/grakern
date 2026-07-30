@@ -266,8 +266,6 @@ object WLCompiler:
             .gram(
               features,
               rows,
-              WLCompiler.coordinateHash,
-              WLCompiler.sameCoordinate,
               plan.options.gramExecution
             )
             .left
@@ -343,4 +341,17 @@ object WLCompiler:
   private[engine] def coordinateHash(
       coordinate: WLFeatureCoordinate
   ): Int =
-    coordinate.hashCode()
+    var result = 1
+    var pathIndex = 0
+    while pathIndex < coordinate.blockPath.size do
+      result = 31 * result + coordinate.blockPath(pathIndex)
+      pathIndex += 1
+    coordinate.feature match
+      case WLCompiledFeature.Subtree(feature) =>
+        result = 31 * result + 1
+        result = 31 * result + feature.round
+        31 * result + feature.signature.hashCode()
+      case WLCompiledFeature.OptimalAssignment(feature) =>
+        result = 31 * result + 2
+        result = 31 * result + feature.node.hashCode()
+        31 * result + feature.multiplicityThreshold

@@ -3,6 +3,7 @@ package grakern.engine
 import gale.linalg.LinAlgError
 import gale.sparse.{CSR, DuplicatePolicy, Sparse}
 import grakern.core.SampleKey
+import scala.collection.mutable
 
 final case class SampleIndex(keys: Vector[SampleKey]):
   def size: Int = keys.size
@@ -20,16 +21,22 @@ final class FeatureDictionary[Coordinate] private[engine] (
         Coordinate
     ) => Boolean
 ):
-  private val buckets =
-    coordinates.indices.foldLeft(
-      Map.empty[Int, Vector[Int]]
-    ) { (current, index) =>
-      val hash = coordinateHash(coordinates(index))
-      current.updated(
-        hash,
-        current.getOrElse(hash, Vector.empty) :+ index
-      )
-    }
+  private val hashes =
+    new Array[Int](coordinates.size)
+  private val table =
+    Array.fill(FeatureDictionary.tableSize(coordinates.size))(-1)
+  private val mask =
+    table.length - 1
+  private var buildIndex = 0
+  while buildIndex < coordinates.size do
+    val hash =
+      coordinateHash(coordinates(buildIndex))
+    hashes(buildIndex) = hash
+    var slot =
+      FeatureDictionary.spread(hash) & mask
+    while table(slot) >= 0 do slot = (slot + 1) & mask
+    table(slot) = buildIndex
+    buildIndex += 1
 
   def size: Int = coordinates.size
 
@@ -37,9 +44,40 @@ final class FeatureDictionary[Coordinate] private[engine] (
     coordinates.lift(index)
 
   def indexOf(coordinate: Coordinate): Option[Int] =
-    buckets
-      .getOrElse(coordinateHash(coordinate), Vector.empty)
-      .find(index => sameCoordinate(coordinates(index), coordinate))
+    indexOrNegative(coordinate) match
+      case index if index >= 0 => Some(index)
+      case _                   => None
+
+  private[engine] def indexOrNegative(
+      coordinate: Coordinate
+  ): Int =
+    val hash =
+      coordinateHash(coordinate)
+    var slot =
+      FeatureDictionary.spread(hash) & mask
+    var candidate =
+      table(slot)
+    while candidate >= 0 do
+      if hashes(candidate) == hash &&
+        sameCoordinate(
+          coordinates(candidate),
+          coordinate
+        )
+      then return candidate
+      slot = (slot + 1) & mask
+      candidate = table(slot)
+    -1
+
+private object FeatureDictionary:
+  def tableSize(entries: Int): Int =
+    val target =
+      math.max(2L, entries.toLong * 2L)
+    var size = 2
+    while size.toLong < target do size = size << 1
+    size
+
+  def spread(hash: Int): Int =
+    hash ^ (hash >>> 16)
 
 final case class FeatureMetadata[+Metadata](
     columns: Vector[Metadata]
@@ -86,30 +124,27 @@ private[grakern] object ExactFeatureMatrix:
     LinAlgError,
     FeatureMatrix[Coordinate, Metadata]
   ] =
-    val coordinateBuilder =
-      Vector.newBuilder[Coordinate]
-    val observed =
-      scala.collection.mutable.ArrayBuffer.empty[Coordinate]
-    val buckets =
-      scala.collection.mutable.HashMap.empty[
-        Int,
-        Vector[Int]
-      ]
-    rows.iterator
-      .flatMap(_.entries.iterator.map(_._1))
-      .foreach { coordinate =>
-        val hash = coordinateHash(coordinate)
-        val candidates =
-          buckets.getOrElse(hash, Vector.empty)
-        if !candidates.exists(index => sameCoordinate(observed(index), coordinate))
-        then
-          val index = observed.size
-          observed += coordinate
-          coordinateBuilder += coordinate
-          buckets.update(hash, candidates :+ index)
-      }
+    val coordinateInterner =
+      new ExactCoordinateInterner(
+        coordinateHash,
+        sameCoordinate
+      )
+    val columnRows =
+      new Array[Array[Int]](rows.size)
+    var rowIndex = 0
+    while rowIndex < rows.size do
+      val entries = rows(rowIndex).entries
+      val columns = new Array[Int](entries.size)
+      var entryIndex = 0
+      while entryIndex < entries.size do
+        columns(entryIndex) = coordinateInterner.intern(
+          entries(entryIndex)._1
+        )
+        entryIndex += 1
+      columnRows(rowIndex) = columns
+      rowIndex += 1
     val coordinates =
-      coordinateBuilder.result()
+      coordinateInterner.coordinates
     val dictionary =
       new FeatureDictionary(
         coordinates,
@@ -117,13 +152,19 @@ private[grakern] object ExactFeatureMatrix:
         sameCoordinate
       )
     val builder = Sparse.coo(rows.size, dictionary.size)
-    rows.zipWithIndex.foreach { case (row, rowIndex) =>
-      row.entries.foreach { case (coordinate, value) =>
-        dictionary.indexOf(coordinate).foreach { columnIndex =>
-          builder.add(rowIndex, columnIndex, value)
-        }
-      }
-    }
+    rowIndex = 0
+    while rowIndex < rows.size do
+      val row = rows(rowIndex)
+      var entryIndex = 0
+      while entryIndex < row.entries.size do
+        val entry = row.entries(entryIndex)
+        builder.add(
+          rowIndex,
+          columnRows(rowIndex)(entryIndex),
+          entry._2
+        ): Unit
+        entryIndex += 1
+      rowIndex += 1
     builder
       .tryToCSR(DuplicatePolicy.Error)
       .map { values =>
@@ -136,3 +177,69 @@ private[grakern] object ExactFeatureMatrix:
           )
         )
       }
+
+  final private class ExactCoordinateInterner[Coordinate](
+      coordinateHash: Coordinate => Int,
+      sameCoordinate: (
+          Coordinate,
+          Coordinate
+      ) => Boolean
+  ):
+    private val observed =
+      mutable.ArrayBuffer.empty[Coordinate]
+    private val hashes =
+      mutable.ArrayBuffer.empty[Int]
+    private var table =
+      Array.fill(16)(-1)
+
+    def coordinates: Vector[Coordinate] =
+      observed.toVector
+
+    def intern(coordinate: Coordinate): Int =
+      val hash = coordinateHash(coordinate)
+      val existing =
+        find(coordinate, hash)
+      if existing >= 0 then existing
+      else
+        ensureCapacity()
+        val index = observed.size
+        observed += coordinate
+        hashes += hash
+        insert(index, hash)
+        index
+
+    private def find(
+        coordinate: Coordinate,
+        hash: Int
+    ): Int =
+      val mask = table.length - 1
+      var slot =
+        FeatureDictionary.spread(hash) & mask
+      var candidate =
+        table(slot)
+      while candidate >= 0 do
+        if hashes(candidate) == hash &&
+          sameCoordinate(
+            observed(candidate),
+            coordinate
+          )
+        then return candidate
+        slot = (slot + 1) & mask
+        candidate = table(slot)
+      -1
+
+    private def ensureCapacity(): Unit =
+      if (observed.size + 1) * 2 > table.length then
+        val previousSize = observed.size
+        table = Array.fill(table.length << 1)(-1)
+        var index = 0
+        while index < previousSize do
+          insert(index, hashes(index))
+          index += 1
+
+    private def insert(index: Int, hash: Int): Unit =
+      val mask = table.length - 1
+      var slot =
+        FeatureDictionary.spread(hash) & mask
+      while table(slot) >= 0 do slot = (slot + 1) & mask
+      table(slot) = index

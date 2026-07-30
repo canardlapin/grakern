@@ -1,6 +1,7 @@
 package grakern.engine
 
 import grakern.standard.wl.*
+import scala.collection.mutable
 
 enum WLFeatureComponent derives CanEqual:
   case Subtree
@@ -26,10 +27,13 @@ final class WLFeatureProvenanceIndex[V, NodeKey, EdgeKey] private[engine] (
       WLFeatureProvenance[V, NodeKey, EdgeKey]
     ]
 ):
+  private val byFeature =
+    entries.iterator.map(value => value.feature -> value).toMap
+
   def find(
       feature: WLCombinedFeature
   ): Option[WLFeatureProvenance[V, NodeKey, EdgeKey]] =
-    entries.find(value => WLCombinedFeatures.sameFeature(value.feature, feature))
+    byFeature.get(feature)
 
   private[engine] def contributions(
       left: ExactFeatureRow[WLCombinedFeature],
@@ -61,30 +65,25 @@ private[grakern] object WLFeatureProvenanceIndex:
       subtree: WLSubtreeFeatures[V],
       rows: Vector[ExactFeatureRow[WLCombinedFeature]]
   ): WLFeatureProvenanceIndex[V, NodeKey, EdgeKey] =
+    val distinct =
+      mutable.LinkedHashSet.empty[WLCombinedFeature]
+    rows.foreach { row =>
+      row.entries.foreach { case (feature, _) =>
+        distinct.add(feature)
+      }
+    }
     val features =
-      rows.iterator
-        .flatMap(_.entries.iterator.map(_._1))
-        .foldLeft(Vector.empty[WLCombinedFeature]) { (current, feature) =>
-          if current.exists(
-              WLCombinedFeatures.sameFeature(_, feature)
-            )
-          then current
-          else current :+ feature
-        }
+      distinct.toVector
+    val subtreeRepresentatives =
+      subtree.provenance.iterator
+        .map(value => value.feature -> value.occurrences)
+        .toMap
     val provenance =
       features.map {
         case value @ WLCombinedFeature.Subtree(feature) =>
           val representatives =
-            subtree.provenance
-              .find(item =>
-                WLSubtreeFeatures.sameFeature(
-                  item.feature,
-                  feature
-                )
-              )
-              .fold(Vector.empty[WLSource[V]])(
-                _.occurrences
-              )
+            subtreeRepresentatives
+              .getOrElse(feature, Vector.empty)
           WLFeatureProvenance(
             value,
             WLFeatureComponent.Subtree,

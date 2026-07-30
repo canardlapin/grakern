@@ -107,16 +107,14 @@ private[grakern] object WLTrace:
           packed.originalVertex(vertexIndex)
         )
       }
-    var interner =
-      WLInterner.empty(
+    val interner =
+      WLInternerBuilder.empty(
         refinement.codecs,
         refinement.hashing
       )
     val initial = Vector.newBuilder[WLColour]
     nodeKeys.foreach { key =>
-      val (next, colour) = interner.internInitial(key)
-      interner = next
-      initial += colour
+      initial += interner.internInitial(key)
     }
     var allLevels = Vector(initial.result())
     var previous = allLevels.head
@@ -135,8 +133,7 @@ private[grakern] object WLTrace:
           previous(vertexIndex),
           neighbourhood
         ) match
-          case Right((next, colour)) =>
-            interner = next
+          case Right(colour) =>
             current += colour
           case Left(error) =>
             failure = Some(
@@ -162,6 +159,6 @@ private[grakern] object WLTrace:
         ),
         sources,
         allLevels,
-        interner
+        interner.freeze()
       )
     )
