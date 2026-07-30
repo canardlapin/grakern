@@ -27,7 +27,7 @@ DEFAULT_OUTPUT = (
     / "wl_pair_path.json"
 )
 
-SAMPLES = [
+TRAIN_SAMPLES = [
     {
         "key": "pair",
         "edges": [[0, 1]],
@@ -37,6 +37,19 @@ SAMPLES = [
         "key": "path",
         "edges": [[0, 1], [1, 2]],
         "node_labels": ["C", "O", "C"],
+    },
+]
+
+QUERY_SAMPLES = [
+    {
+        "key": "single",
+        "edges": [],
+        "node_labels": ["C"],
+    },
+    {
+        "key": "triangle",
+        "edges": [[0, 1], [1, 2], [0, 2]],
+        "node_labels": ["C", "C", "O"],
     },
 ]
 
@@ -53,27 +66,47 @@ def as_grakel_graph(sample: dict[str, Any]) -> tuple[dict[int, list[int]], dict[
     return adjacency, labels
 
 
-def flattened_gram(kernel: GraphKernel, graphs: list[Any]) -> list[float]:
-    matrix = np.asarray(kernel.fit_transform(graphs), dtype=float)
-    return matrix.reshape(-1).tolist()
+def flattened_views(
+    kernel: GraphKernel,
+    training: list[Any],
+    query: list[Any],
+) -> tuple[list[float], list[float]]:
+    gram = np.asarray(kernel.fit_transform(training), dtype=float)
+    cross = np.asarray(kernel.transform(query), dtype=float)
+    return gram.reshape(-1).tolist(), cross.reshape(-1).tolist()
 
 
 def build_fixture() -> dict[str, Any]:
-    graphs = [as_grakel_graph(sample) for sample in SAMPLES]
+    training = [as_grakel_graph(sample) for sample in TRAIN_SAMPLES]
+    query = [as_grakel_graph(sample) for sample in QUERY_SAMPLES]
     rounds = 2
-    subtree = GraphKernel(
-        kernel=[
-            {"name": "weisfeiler_lehman", "n_iter": rounds},
-            {"name": "subtree_wl"},
-        ],
-        normalize=False,
+    subtree_spec = [
+        {"name": "weisfeiler_lehman", "n_iter": rounds},
+        {"name": "subtree_wl"},
+    ]
+    assignment_spec = {
+        "name": "weisfeiler_lehman_optimal_assignment",
+        "n_iter": rounds,
+    }
+    subtree_gram, subtree_cross = flattened_views(
+        GraphKernel(kernel=subtree_spec, normalize=False),
+        training,
+        query,
     )
-    assignment = GraphKernel(
-        kernel={
-            "name": "weisfeiler_lehman_optimal_assignment",
-            "n_iter": rounds,
-        },
-        normalize=False,
+    normalized_subtree_gram, normalized_subtree_cross = flattened_views(
+        GraphKernel(kernel=subtree_spec, normalize=True),
+        training,
+        query,
+    )
+    assignment_gram, assignment_cross = flattened_views(
+        GraphKernel(kernel=assignment_spec, normalize=False),
+        training,
+        query,
+    )
+    normalized_assignment_gram, normalized_assignment_cross = flattened_views(
+        GraphKernel(kernel=assignment_spec, normalize=True),
+        training,
+        query,
     )
     return {
         "comparison_policy": {
@@ -81,6 +114,30 @@ def build_fixture() -> dict[str, Any]:
             "authority": "compatibility evidence, not semantic oracle",
             "relative_tolerance": 1.0e-12,
         },
+        "cross_shape": [len(QUERY_SAMPLES), len(TRAIN_SAMPLES)],
+        "exclusions": [
+            {
+                "reason": (
+                    "GraKeL normalization does not retain the complete "
+                    "query-only WL feature norm required by Grakern"
+                ),
+                "view": "wl_subtree_normalized_cross",
+            },
+            {
+                "reason": (
+                    "GraKeL transform-time handling of query-only WL colours "
+                    "does not preserve Grakern's hierarchy-ancestor contract"
+                ),
+                "view": "wl_optimal_assignment_cross",
+            },
+            {
+                "reason": (
+                    "inherits the excluded unnormalized optimal-assignment "
+                    "cross semantics"
+                ),
+                "view": "wl_optimal_assignment_normalized_cross",
+            },
+        ],
         "gram_shape": [2, 2],
         "oracle": {
             "distribution": "GraKeL",
@@ -89,16 +146,17 @@ def build_fixture() -> dict[str, Any]:
             "numpy_version": np.__version__,
             "python_version": ".".join(platform.python_version_tuple()[:2]),
         },
-        "samples": SAMPLES,
-        "schema_version": "grakern.grakel-fixture.v1",
+        "query_samples": QUERY_SAMPLES,
+        "schema_version": "grakern.grakel-fixture.v2",
         "semantics": {
             "edge_labels": False,
-            "normalization": False,
+            "normalization": ["false", "true"],
             "rounds": rounds,
-            "sample_order": [sample["key"] for sample in SAMPLES],
+            "query_order": [sample["key"] for sample in QUERY_SAMPLES],
+            "sample_order": [sample["key"] for sample in TRAIN_SAMPLES],
             "split": {
-                "query": [],
-                "train": [sample["key"] for sample in SAMPLES],
+                "query": [sample["key"] for sample in QUERY_SAMPLES],
+                "train": [sample["key"] for sample in TRAIN_SAMPLES],
             },
             "wl_optimal_assignment": {
                 "name": "weisfeiler_lehman_optimal_assignment",
@@ -109,14 +167,15 @@ def build_fixture() -> dict[str, Any]:
                 {"name": "subtree_wl"},
             ],
         },
-        "wl_optimal_assignment_gram_flat": flattened_gram(
-            assignment,
-            graphs,
-        ),
-        "wl_subtree_gram_flat": flattened_gram(
-            subtree,
-            graphs,
-        ),
+        "samples": TRAIN_SAMPLES,
+        "wl_optimal_assignment_cross_flat": assignment_cross,
+        "wl_optimal_assignment_gram_flat": assignment_gram,
+        "wl_optimal_assignment_normalized_cross_flat": normalized_assignment_cross,
+        "wl_optimal_assignment_normalized_gram_flat": normalized_assignment_gram,
+        "wl_subtree_cross_flat": subtree_cross,
+        "wl_subtree_gram_flat": subtree_gram,
+        "wl_subtree_normalized_cross_flat": normalized_subtree_cross,
+        "wl_subtree_normalized_gram_flat": normalized_subtree_gram,
     }
 
 

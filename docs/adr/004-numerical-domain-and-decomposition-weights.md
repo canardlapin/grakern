@@ -51,12 +51,18 @@ The v0.1 decomposition contract is:
 trait Decomposition[-A, P]:
   def fold[B](a: A, initial: B)(
     step: (B, P, NonNegativeFinite) => B
-  ): B
+  ): Either[DecompositionError, B]
 ```
 
-`map`, `flatMap`, `filter`, `reweight`, and `convolve` preserve nonnegative
-weights. A materialized measure exists only as an independent test
-implementation.
+`map`, `flatMap`, `filter`, and `reweight` preserve nonnegative weights. A
+materialized measure exists only as an independent test implementation.
+Kernel convolution is a compiler lift whose preparation propagates any
+decomposition error.
+
+The result is fallible because the product of two finite `Double` weights need
+not itself be finite. This correction was made when the E5 walking slice
+extracted the executable contract; silently saturating or throwing during
+`flatMap` would contradict the checked-arithmetic policy above.
 
 ## Rejected alternatives
 

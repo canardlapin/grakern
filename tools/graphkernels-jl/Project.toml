@@ -1,0 +1,13 @@
+[deps]
+GraphKernels = "fe1457df-6c84-4629-916f-b550d5f6a5bb"
+Graphs = "86223c79-3864-5bf0-83f7-82e725a168b6"
+SimpleValueGraphs = "b43c691f-cac2-5415-8122-396fe16a49fc"
+
+[sources]
+GraphKernels = {url = "https://github.com/simonschoelly/GraphKernels.jl.git", rev = "f04797de0b86a39172b6adbcfcee35ec4b39f91b"}
+
+[compat]
+GraphKernels = "0.2.0"
+Graphs = "1"
+SimpleValueGraphs = "0.4"
+julia = "1.10"

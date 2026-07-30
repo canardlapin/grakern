@@ -40,6 +40,8 @@ object WLCompileError:
 
   final case class FeatureMaterialization(error: LinAlgError) extends WLCompileError[Nothing]
 
+  final case class Gram(error: GramExecutionFailure) extends WLCompileError[Nothing]
+
 final class WLCompiledKernel[V, N, E, NodeKey, EdgeKey] private[engine] (
     val sampleKeys: Vector[SampleKey],
     private[grakern] val rows: Vector[
@@ -61,7 +63,10 @@ final class WLCompiledKernel[V, N, E, NodeKey, EdgeKey] private[engine] (
     val planGraph: WLPlanGraph,
     val semanticFingerprint: Fingerprintability,
     val artifactFingerprint: ArtifactFingerprintability,
-    val features: FeatureMatrix,
+    val features: FeatureMatrix[
+      WLFeatureCoordinate,
+      WLFeatureMetadata
+    ],
     val gram: GramMatrix,
     val operator: KernelOperator,
     val capabilities: WLPreparedCapabilities,
@@ -253,50 +258,62 @@ object WLCompiler:
         .materialize(plan.samples.map(_.key), rows)
         .left
         .map(WLCompileError.FeatureMaterialization(_))
-        .map { features =>
-          val gram = WLNumericalViews.gram(features, rows)
-          val operator = WLNumericalViews.operator(features)
-          val capabilities =
-            WLPreparedCapabilities(
-              exactFeatures = true,
-              gram = true,
-              cross = true,
-              operator = true,
-              queryAlignment = true,
-              provenance = true
-            )
-          val stats =
-            WLExecutionStats(
-              refinementExecutions,
-              subtreeExtractions,
-              assignmentExtractions
-            )
-          val report =
-            WLPlanReport.from(
-              plan.graph,
-              plan.semanticFingerprint,
-              plan.artifactFingerprint,
+        .flatMap { features =>
+          ExactFeatureNumericalViews
+            .gram(
               features,
-              operator,
-              stats
+              rows,
+              WLCompiler.sameCoordinate,
+              plan.options.gramExecution
             )
-          new WLCompiledKernel(
-            plan.samples.map(_.key),
-            rows,
-            traces,
-            plan.kernel.expression,
-            plan.options.diagonalTolerance,
-            plan.graph,
-            plan.semanticFingerprint,
-            plan.artifactFingerprint,
-            features,
-            gram,
-            operator,
-            capabilities,
-            report,
-            auditEvents,
-            stats
-          )
+            .left
+            .map(WLCompileError.Gram(_))
+            .map { gram =>
+              val operator =
+                ExactFeatureNumericalViews.operator(features)
+              val capabilities =
+                WLPreparedCapabilities(
+                  exactFeatures = true,
+                  gram = true,
+                  cross = true,
+                  operator = true,
+                  queryAlignment = true,
+                  provenance = true
+                )
+              val stats =
+                WLExecutionStats(
+                  refinementExecutions,
+                  subtreeExtractions,
+                  assignmentExtractions
+                )
+              val report =
+                WLPlanReport.from(
+                  plan.graph,
+                  plan.semanticFingerprint,
+                  plan.artifactFingerprint,
+                  features,
+                  operator,
+                  plan.options.gramExecution,
+                  stats
+                )
+              new WLCompiledKernel(
+                plan.samples.map(_.key),
+                rows,
+                traces,
+                plan.kernel.expression,
+                plan.options.diagonalTolerance,
+                plan.graph,
+                plan.semanticFingerprint,
+                plan.artifactFingerprint,
+                features,
+                gram,
+                operator,
+                capabilities,
+                report,
+                auditEvents,
+                stats
+              )
+            }
         }
     }
 

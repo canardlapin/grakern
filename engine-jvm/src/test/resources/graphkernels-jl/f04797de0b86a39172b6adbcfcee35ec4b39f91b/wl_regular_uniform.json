@@ -1,0 +1,48 @@
+{
+  "comparison_policy": {
+    "absolute_tolerance": 1e-12,
+    "authority": "compatibility evidence, not semantic oracle",
+    "relative_tolerance": 1e-12
+  },
+  "gram_shape": [3, 3],
+  "oracle": {
+    "distribution": "GraphKernels.jl",
+    "distribution_version": "0.2.0",
+    "julia_version": "1.12.4",
+    "source_revision": "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
+  },
+  "samples": [{
+  "edge_count": 1,
+  "key": "pair",
+  "labels": ["A", "A"],
+  "vertex_count": 2
+}, {
+  "edge_count": 3,
+  "key": "triangle",
+  "labels": ["A", "A", "A"],
+  "vertex_count": 3
+}, {
+  "edge_count": 4,
+  "key": "cycle4",
+  "labels": ["A", "A", "A", "A"],
+  "vertex_count": 4
+}],
+  "schema_version": "grakern.graphkernels-jl-fixture.v1",
+  "semantics": {
+    "base_kernel": "custom exact vertex-label histogram dot product",
+    "edge_labels": false,
+    "grakern_rounds": 2,
+    "graph_encoding": "SimpleValueGraphs.ValGraph over an undirected Graphs.SimpleGraph",
+    "graphkernels_num_iterations": 3,
+    "initial_level_included": true,
+    "normalization": false,
+    "sample_order": ["pair", "triangle", "cycle4"],
+    "scope_restriction": "uniform-labeled regular graphs only"
+  },
+  "source_audit": {
+    "broad_wl_parity": "excluded",
+    "reason": "the pinned refinement reads vertexvals[u, i-1] for every neighbor rather than vertexvals[v, i-1]",
+    "shortest_path": "deferred until Grakern E6 semantics are frozen"
+  },
+  "wl_subtree_gram_flat": [12.0, 6.0, 8.0, 6.0, 27.0, 36.0, 8.0, 36.0, 48.0]
+}

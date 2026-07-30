@@ -34,6 +34,7 @@ final class WLPlanReport private[engine] (
     val normalized: Boolean,
     val queryAlignmentRetainsNovelNorm: Boolean,
     val gramRealization: String,
+    val gramExecution: GramExecution,
     val operatorRealization: KernelOperatorRealization,
     val cost: WLPlanCostEstimate,
     val memory: WLPlanMemoryEstimate,
@@ -75,6 +76,7 @@ final class WLPlanReport private[engine] (
           s"  exact features: $exact",
           s"  features: $sampleCount x $featureCount, nnz=$featureNonZeros, density=$featureDensity",
           s"  gram: $gramRealization",
+          s"  gram execution: ${gramExecution.description}",
           s"  operator: $operatorRealization",
           s"  normalization: $normalized",
           s"  query alignment: frozen dictionary with novel squared norm = $queryAlignmentRetainsNovelNorm",
@@ -125,12 +127,13 @@ final class WLPlanReport private[engine] (
         s"unsafe $claim assumption at node ${node.number}"
 
 private[grakern] object WLPlanReport:
-  def from(
+  def from[Coordinate, Metadata](
       graph: WLPlanGraph,
       semanticFingerprint: Fingerprintability,
       artifactFingerprint: ArtifactFingerprintability,
-      features: FeatureMatrix,
+      features: FeatureMatrix[Coordinate, Metadata],
       operator: KernelOperator,
+      gramExecution: GramExecution,
       executionStats: WLExecutionStats
   ): WLPlanReport =
     val sampleCount = features.values.rows
@@ -160,6 +163,7 @@ private[grakern] object WLPlanReport:
       normalized = graph.count(WLPlanNodeKind.Normalize) > 0,
       queryAlignmentRetainsNovelNorm = true,
       gramRealization = "deterministic exact feature row products",
+      gramExecution,
       operator.realization,
       WLPlanCostEstimate(
         nonZeros.toLong,

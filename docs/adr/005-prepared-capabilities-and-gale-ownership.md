@@ -37,18 +37,18 @@ and its cost.
 Training features are:
 
 ```scala
-FeatureMatrix(
+FeatureMatrix[Coordinate, Metadata](
   values: gale.CSR,
   rows: SampleIndex,
-  columns: FeatureDictionary,
-  metadata: FeatureMetadata
+  columns: FeatureDictionary[Coordinate],
+  metadata: FeatureMetadata[Metadata]
 )
 ```
 
 Query features align to the frozen training dictionary:
 
 ```scala
-AlignedFeatures(
+AlignedFeatures[Coordinate](
   shared: gale.CSR,
   novelSquaredNorm: gale.DVec
 )

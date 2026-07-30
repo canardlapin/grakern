@@ -6,11 +6,11 @@ import grakern.core.*
 import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 
-final case class AlignedFeatures(
+final case class AlignedFeatures[Coordinate](
     shared: CSR,
     novelSquaredNorm: DVec,
     rows: SampleIndex,
-    columns: FeatureDictionary
+    columns: FeatureDictionary[Coordinate]
 ):
   def completeSquaredNorm(row: Int): Option[Double] =
     if row < 0 || row >= shared.rows then None
@@ -32,7 +32,7 @@ final case class WLQueryExecutionStats(
 )
 
 final case class WLQueryResult(
-    features: AlignedFeatures,
+    features: AlignedFeatures[WLFeatureCoordinate],
     cross: CrossKernelMatrix,
     auditEvents: Vector[NumericalAuditEvent],
     executionStats: WLQueryExecutionStats
@@ -274,8 +274,11 @@ private[grakern] object WLQueryAlignment:
   private def align(
       sampleKeys: Vector[SampleKey],
       rows: Vector[ExactFeatureRow[WLFeatureCoordinate]],
-      dictionary: FeatureDictionary
-  ): Either[LinAlgError, AlignedFeatures] =
+      dictionary: FeatureDictionary[WLFeatureCoordinate]
+  ): Either[
+    LinAlgError,
+    AlignedFeatures[WLFeatureCoordinate]
+  ] =
     val builder = Sparse.coo(rows.size, dictionary.size)
     val novelNorms = DVec.newBuilder(rows.size)
     rows.zipWithIndex.foreach { case (row, rowIndex) =>
@@ -301,8 +304,11 @@ private[grakern] object WLQueryAlignment:
       }
 
   private def cross(
-      query: AlignedFeatures,
-      training: FeatureMatrix
+      query: AlignedFeatures[WLFeatureCoordinate],
+      training: FeatureMatrix[
+        WLFeatureCoordinate,
+        WLFeatureMetadata
+      ]
   ): CrossKernelMatrix =
     val builder =
       DMat.newBuilder(query.shared.rows, training.values.rows)

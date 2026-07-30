@@ -18,7 +18,7 @@ final class WLRefinement[N, E, NodeKey, EdgeKey] private (
     private[grakern] val edgeKey: Projection[E, EdgeKey],
     private[grakern] val codecs: WLCodecs[NodeKey, EdgeKey],
     private[grakern] val hashing: WLHashStrategy[NodeKey, EdgeKey]
-):
+) extends Refinement:
   def fingerprintability: Fingerprintability =
     Fingerprintability.combine(
       schema = "grakern.wl-refinement.v1",

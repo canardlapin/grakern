@@ -1,0 +1,1 @@
+{"actor":"codex-grakern","entity":"grakern-e5-deterministic-parallel","kind":"note","note_kind":"progress","op":"20260730T010005.569873Z-p50213-c0003-rae57-hc941a3","text":"Add explicit deterministic Gram tiling policy, fixed cell reduction order, plan disclosure, and schedule comparison tests.","ts":"2026-07-30T01:00:05.569873Z","v":1}

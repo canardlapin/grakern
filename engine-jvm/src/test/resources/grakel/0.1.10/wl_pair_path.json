@@ -4,6 +4,24 @@
     "authority": "compatibility evidence, not semantic oracle",
     "relative_tolerance": 1e-12
   },
+  "cross_shape": [
+    2,
+    2
+  ],
+  "exclusions": [
+    {
+      "reason": "GraKeL normalization does not retain the complete query-only WL feature norm required by Grakern",
+      "view": "wl_subtree_normalized_cross"
+    },
+    {
+      "reason": "GraKeL transform-time handling of query-only WL colours does not preserve Grakern's hierarchy-ancestor contract",
+      "view": "wl_optimal_assignment_cross"
+    },
+    {
+      "reason": "inherits the excluded unnormalized optimal-assignment cross semantics",
+      "view": "wl_optimal_assignment_normalized_cross"
+    }
+  ],
   "gram_shape": [
     2,
     2
@@ -15,6 +33,37 @@
     "numpy_version": "1.26.4",
     "python_version": "3.11"
   },
+  "query_samples": [
+    {
+      "edges": [],
+      "key": "single",
+      "node_labels": [
+        "C"
+      ]
+    },
+    {
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "key": "triangle",
+      "node_labels": [
+        "C",
+        "C",
+        "O"
+      ]
+    }
+  ],
   "samples": [
     {
       "edges": [
@@ -48,17 +97,27 @@
       ]
     }
   ],
-  "schema_version": "grakern.grakel-fixture.v1",
+  "schema_version": "grakern.grakel-fixture.v2",
   "semantics": {
     "edge_labels": false,
-    "normalization": false,
+    "normalization": [
+      "false",
+      "true"
+    ],
+    "query_order": [
+      "single",
+      "triangle"
+    ],
     "rounds": 2,
     "sample_order": [
       "pair",
       "path"
     ],
     "split": {
-      "query": [],
+      "query": [
+        "single",
+        "triangle"
+      ],
       "train": [
         "pair",
         "path"
@@ -78,16 +137,52 @@
       }
     ]
   },
+  "wl_optimal_assignment_cross_flat": [
+    0.0,
+    0.0,
+    2.0,
+    4.0
+  ],
   "wl_optimal_assignment_gram_flat": [
     6.0,
     2.0,
     2.0,
     9.0
   ],
+  "wl_optimal_assignment_normalized_cross_flat": [
+    0.0,
+    0.0,
+    0.2721655269759087,
+    0.4444444444444444
+  ],
+  "wl_optimal_assignment_normalized_gram_flat": [
+    1.0,
+    0.2721655269759087,
+    0.2721655269759087,
+    1.0
+  ],
+  "wl_subtree_cross_flat": [
+    2.0,
+    2.0,
+    4.0,
+    6.0
+  ],
   "wl_subtree_gram_flat": [
     12.0,
     4.0,
     4.0,
     15.0
+  ],
+  "wl_subtree_normalized_cross_flat": [
+    0.5773502691896258,
+    0.5163977794943222,
+    0.29814239699997197,
+    0.4
+  ],
+  "wl_subtree_normalized_gram_flat": [
+    1.0,
+    0.29814239699997197,
+    0.29814239699997197,
+    1.0
   ]
 }

@@ -117,7 +117,8 @@ object WLPlanGraph:
 
 final case class WLPlanOptions(
     corpusContent: Option[CorpusContentFingerprint] = None,
-    diagonalTolerance: NonNegativeFinite = NonNegativeFinite.zero
+    diagonalTolerance: NonNegativeFinite = NonNegativeFinite.zero,
+    gramExecution: GramExecution = GramExecution.Sequential
 )
 
 final class WLPlan[V, N, E, NodeKey, EdgeKey] private[engine] (
@@ -162,7 +163,8 @@ object WLPlan:
           compilerSchema = WLPlanIds.compilerSchema,
           loweringSchema = WLPlanIds.loweringSchema,
           numericalPolicy = WLPlanIds.numericalPolicy(
-            options.diagonalTolerance
+            options.diagonalTolerance,
+            options.gramExecution
           ),
           approximation = None,
           engineVersion = WLPlanIds.engineVersion
@@ -183,13 +185,14 @@ private object WLPlanIds:
   val loweringSchema: StableId =
     stableId("exact-wl-sparse-features.v1")
   def numericalPolicy(
-      diagonalTolerance: NonNegativeFinite
+      diagonalTolerance: NonNegativeFinite,
+      gramExecution: GramExecution
   ): StableId =
     stableId(
-      s"ordered-double-reduction.v1;diagonal-tolerance=${diagonalTolerance.toDouble}"
+      s"ordered-double-reduction.v2;diagonal-tolerance=${diagonalTolerance.toDouble};gram=${gramExecution.stableDescriptor}"
     )
   val engineVersion: StableId =
-    stableId("grakern-engine-e4")
+    stableId("grakern-engine-e5")
 
   private def stableId(value: String): StableId =
     StableId
