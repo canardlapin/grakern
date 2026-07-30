@@ -6,7 +6,7 @@ using SimpleValueGraphs
 
 const REPOSITORY = normpath(joinpath(@__DIR__, "..", ".."))
 const REVISION = "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
-const DEFAULT_OUTPUT = joinpath(
+const DEFAULT_WL_OUTPUT = joinpath(
     REPOSITORY,
     "engine-jvm",
     "src",
@@ -15,6 +15,16 @@ const DEFAULT_OUTPUT = joinpath(
     "graphkernels-jl",
     REVISION,
     "wl_regular_uniform.json",
+)
+const DEFAULT_SHORTEST_PATH_OUTPUT = joinpath(
+    REPOSITORY,
+    "engine-jvm",
+    "src",
+    "test",
+    "resources",
+    "graphkernels-jl",
+    REVISION,
+    "shortest_path.json",
 )
 
 struct VertexHistogramKernel <: GraphKernels.AbstractGraphKernel end
@@ -86,7 +96,7 @@ function json_array(values)
     return "[" * join(values, ", ") * "]"
 end
 
-function render_fixture()
+function render_wl_fixture()
     graphs = graph_from.(SAMPLES)
     rounds = 2
     iterations = rounds + 1
@@ -149,22 +159,99 @@ function render_fixture()
     """
 end
 
+function render_shortest_path_fixture()
+    graphs = graph_from.(SAMPLES)
+    kernel = ShortestPathGraphKernel(
+        tol = 0.0,
+        vertex_kernel = ConstVertexKernel(1.0),
+        dist_key = nothing,
+    )
+    gram = kernelmatrix(kernel, graphs)
+    flat = [
+        Float64(gram[row, column])
+        for row in axes(gram, 1)
+        for column in axes(gram, 2)
+    ]
+    sample_json = [
+        """
+        {
+          "edge_count": $(length(sample.edges)),
+          "key": $(json_string(sample.key)),
+          "labels": $(json_array(json_string.(sample.labels))),
+          "vertex_count": $(length(sample.labels))
+        }"""
+        for sample in SAMPLES
+    ]
+    flat_json = json_array(string.(flat))
+    return """
+    {
+      "comparison_policy": {
+        "absolute_tolerance": 1e-12,
+        "authority": "compatibility evidence, not semantic oracle",
+        "relative_tolerance": 1e-12
+      },
+      "gram_shape": [$(length(SAMPLES)), $(length(SAMPLES))],
+      "oracle": {
+        "distribution": "GraphKernels.jl",
+        "distribution_version": "0.2.0",
+        "julia_version": $(json_string(string(VERSION))),
+        "source_revision": "$REVISION"
+      },
+      "samples": $(json_array(sample_json)),
+      "schema_version": "grakern.graphkernels-jl-shortest-path-fixture.v1",
+      "semantics": {
+        "distance": "unit edge length",
+        "dist_key": "nothing",
+        "pair_enumeration": "ordered off-diagonal reachable vertex pairs",
+        "sample_order": $(json_array(json_string.([sample.key for sample in SAMPLES]))),
+        "tolerance": 0.0,
+        "vertex_kernel": "ConstVertexKernel(1.0)"
+      },
+      "source_audit": {
+        "endpoint_combination": "addition",
+        "formula": "vertex_kernel(u,u') + vertex_kernel(v,v')",
+        "status": "declared compatibility behavior, not Grakern's product-kernel denotation"
+      },
+      "translation_to_grakern": {
+        "grakern_pair_enumeration": "unordered off-diagonal reachable vertex pairs",
+        "raw_gram_divisor": 8.0,
+        "reason": "ordered-pair duplication contributes a factor of four and additive constant endpoint scores contribute a factor of two"
+      },
+      "shortest_path_gram_flat": $flat_json
+    }
+    """
+end
+
 function main()
     check = "--check" in ARGS
     write_fixture = "--write" in ARGS
     check && write_fixture && error("--check and --write are mutually exclusive")
     output_index = findfirst(==("--output"), ARGS)
-    output = isnothing(output_index) ? DEFAULT_OUTPUT : ARGS[output_index + 1]
-    rendered = render_fixture()
+    output = isnothing(output_index) ? DEFAULT_WL_OUTPUT : ARGS[output_index + 1]
+    shortest_path_output_index = findfirst(==("--shortest-path-output"), ARGS)
+    shortest_path_output = isnothing(shortest_path_output_index) ?
+        DEFAULT_SHORTEST_PATH_OUTPUT :
+        ARGS[shortest_path_output_index + 1]
+    outputs = [
+        output => render_wl_fixture(),
+        shortest_path_output => render_shortest_path_fixture(),
+    ]
 
     if check
-        read(output, String) == rendered ||
-            error("GraphKernels.jl fixture drift: $output")
+        for (path, rendered) in outputs
+            read(path, String) == rendered ||
+                error("GraphKernels.jl fixture drift: $path")
+        end
     elseif write_fixture
-        mkpath(dirname(output))
-        write(output, rendered)
+        for (path, rendered) in outputs
+            mkpath(dirname(path))
+            write(path, rendered)
+        end
     else
-        print(rendered)
+        for (path, rendered) in outputs
+            println("=== $path ===")
+            print(rendered)
+        end
     end
 end
 

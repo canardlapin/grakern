@@ -1,0 +1,125 @@
+{
+  "comparison_policy": {
+    "absolute_tolerance": 1e-12,
+    "authority": "compatibility evidence, not semantic oracle",
+    "relative_tolerance": 1e-12
+  },
+  "gram_shape": [
+    3,
+    3
+  ],
+  "oracle": {
+    "distribution": "GraKeL",
+    "distribution_version": "0.1.10",
+    "module_version": "0.1.8",
+    "numpy_version": "1.26.4",
+    "python_version": "3.11"
+  },
+  "samples": [
+    {
+      "edges": [
+        [
+          0,
+          1
+        ]
+      ],
+      "key": "pair",
+      "node_labels": [
+        "A",
+        "A"
+      ]
+    },
+    {
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          0,
+          2
+        ]
+      ],
+      "key": "triangle",
+      "node_labels": [
+        "A",
+        "A",
+        "A"
+      ]
+    },
+    {
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          1,
+          2
+        ],
+        [
+          2,
+          3
+        ],
+        [
+          3,
+          0
+        ]
+      ],
+      "key": "cycle4",
+      "node_labels": [
+        "A",
+        "A",
+        "A",
+        "A"
+      ]
+    }
+  ],
+  "schema_version": "grakern.grakel-shortest-path-fixture.v1",
+  "semantics": {
+    "algorithm_type": "floyd_warshall",
+    "distance": "unit edge length",
+    "endpoint_labels": false,
+    "normalization": [
+      false,
+      true
+    ],
+    "pair_enumeration": "ordered off-diagonal reachable vertex pairs",
+    "sample_order": [
+      "pair",
+      "triangle",
+      "cycle4"
+    ]
+  },
+  "shortest_path_gram_flat": [
+    4.0,
+    12.0,
+    16.0,
+    12.0,
+    36.0,
+    48.0,
+    16.0,
+    48.0,
+    80.0
+  ],
+  "shortest_path_normalized_gram_flat": [
+    1.0,
+    1.0,
+    0.8944271909999159,
+    1.0,
+    1.0,
+    0.8944271909999159,
+    0.8944271909999159,
+    0.8944271909999159,
+    1.0
+  ],
+  "translation_to_grakern": {
+    "grakern_pair_enumeration": "unordered off-diagonal reachable vertex pairs",
+    "raw_gram_divisor": 4.0,
+    "reason": "each undirected pair is emitted twice by GraKeL, so the unlabeled count vector is doubled and its Gram is quadrupled"
+  }
+}

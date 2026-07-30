@@ -1,0 +1,50 @@
+{
+  "comparison_policy": {
+    "absolute_tolerance": 1e-12,
+    "authority": "compatibility evidence, not semantic oracle",
+    "relative_tolerance": 1e-12
+  },
+  "gram_shape": [3, 3],
+  "oracle": {
+    "distribution": "GraphKernels.jl",
+    "distribution_version": "0.2.0",
+    "julia_version": "1.12.4",
+    "source_revision": "f04797de0b86a39172b6adbcfcee35ec4b39f91b"
+  },
+  "samples": [{
+  "edge_count": 1,
+  "key": "pair",
+  "labels": ["A", "A"],
+  "vertex_count": 2
+}, {
+  "edge_count": 3,
+  "key": "triangle",
+  "labels": ["A", "A", "A"],
+  "vertex_count": 3
+}, {
+  "edge_count": 4,
+  "key": "cycle4",
+  "labels": ["A", "A", "A", "A"],
+  "vertex_count": 4
+}],
+  "schema_version": "grakern.graphkernels-jl-shortest-path-fixture.v1",
+  "semantics": {
+    "distance": "unit edge length",
+    "dist_key": "nothing",
+    "pair_enumeration": "ordered off-diagonal reachable vertex pairs",
+    "sample_order": ["pair", "triangle", "cycle4"],
+    "tolerance": 0.0,
+    "vertex_kernel": "ConstVertexKernel(1.0)"
+  },
+  "source_audit": {
+    "endpoint_combination": "addition",
+    "formula": "vertex_kernel(u,u') + vertex_kernel(v,v')",
+    "status": "declared compatibility behavior, not Grakern's product-kernel denotation"
+  },
+  "translation_to_grakern": {
+    "grakern_pair_enumeration": "unordered off-diagonal reachable vertex pairs",
+    "raw_gram_divisor": 8.0,
+    "reason": "ordered-pair duplication contributes a factor of four and additive constant endpoint scores contribute a factor of two"
+  },
+  "shortest_path_gram_flat": [8.0, 24.0, 32.0, 24.0, 72.0, 96.0, 32.0, 96.0, 160.0]
+}

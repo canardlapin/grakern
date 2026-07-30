@@ -16,7 +16,7 @@ from grakel import GraphKernel
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
-DEFAULT_OUTPUT = (
+DEFAULT_WL_OUTPUT = (
     REPOSITORY
     / "engine-jvm"
     / "src"
@@ -25,6 +25,16 @@ DEFAULT_OUTPUT = (
     / "grakel"
     / "0.1.10"
     / "wl_pair_path.json"
+)
+DEFAULT_SHORTEST_PATH_OUTPUT = (
+    REPOSITORY
+    / "engine-jvm"
+    / "src"
+    / "test"
+    / "resources"
+    / "grakel"
+    / "0.1.10"
+    / "shortest_path.json"
 )
 
 TRAIN_SAMPLES = [
@@ -53,6 +63,24 @@ QUERY_SAMPLES = [
     },
 ]
 
+SHORTEST_PATH_SAMPLES = [
+    {
+        "key": "pair",
+        "edges": [[0, 1]],
+        "node_labels": ["A", "A"],
+    },
+    {
+        "key": "triangle",
+        "edges": [[0, 1], [1, 2], [0, 2]],
+        "node_labels": ["A", "A", "A"],
+    },
+    {
+        "key": "cycle4",
+        "edges": [[0, 1], [1, 2], [2, 3], [3, 0]],
+        "node_labels": ["A", "A", "A", "A"],
+    },
+]
+
 
 def as_grakel_graph(sample: dict[str, Any]) -> tuple[dict[int, list[int]], dict[int, str]]:
     labels = {
@@ -76,7 +104,17 @@ def flattened_views(
     return gram.reshape(-1).tolist(), cross.reshape(-1).tolist()
 
 
-def build_fixture() -> dict[str, Any]:
+def oracle_metadata() -> dict[str, str]:
+    return {
+        "distribution": "GraKeL",
+        "distribution_version": importlib.metadata.version("GraKeL"),
+        "module_version": grakel.__version__,
+        "numpy_version": np.__version__,
+        "python_version": ".".join(platform.python_version_tuple()[:2]),
+    }
+
+
+def build_wl_fixture() -> dict[str, Any]:
     training = [as_grakel_graph(sample) for sample in TRAIN_SAMPLES]
     query = [as_grakel_graph(sample) for sample in QUERY_SAMPLES]
     rounds = 2
@@ -139,13 +177,7 @@ def build_fixture() -> dict[str, Any]:
             },
         ],
         "gram_shape": [2, 2],
-        "oracle": {
-            "distribution": "GraKeL",
-            "distribution_version": importlib.metadata.version("GraKeL"),
-            "module_version": grakel.__version__,
-            "numpy_version": np.__version__,
-            "python_version": ".".join(platform.python_version_tuple()[:2]),
-        },
+        "oracle": oracle_metadata(),
         "query_samples": QUERY_SAMPLES,
         "schema_version": "grakern.grakel-fixture.v2",
         "semantics": {
@@ -179,6 +211,61 @@ def build_fixture() -> dict[str, Any]:
     }
 
 
+def build_shortest_path_fixture() -> dict[str, Any]:
+    graphs = [as_grakel_graph(sample) for sample in SHORTEST_PATH_SAMPLES]
+    specification = {
+        "name": "shortest_path",
+        "algorithm_type": "floyd_warshall",
+        "with_labels": False,
+    }
+    raw_gram = np.asarray(
+        GraphKernel(kernel=specification, normalize=False).fit_transform(graphs),
+        dtype=float,
+    )
+    normalized_gram = np.asarray(
+        GraphKernel(kernel=specification, normalize=True).fit_transform(graphs),
+        dtype=float,
+    )
+    return {
+        "comparison_policy": {
+            "absolute_tolerance": 1.0e-12,
+            "authority": "compatibility evidence, not semantic oracle",
+            "relative_tolerance": 1.0e-12,
+        },
+        "gram_shape": [
+            len(SHORTEST_PATH_SAMPLES),
+            len(SHORTEST_PATH_SAMPLES),
+        ],
+        "oracle": oracle_metadata(),
+        "samples": SHORTEST_PATH_SAMPLES,
+        "schema_version": "grakern.grakel-shortest-path-fixture.v1",
+        "semantics": {
+            "algorithm_type": "floyd_warshall",
+            "distance": "unit edge length",
+            "endpoint_labels": False,
+            "normalization": [False, True],
+            "pair_enumeration": "ordered off-diagonal reachable vertex pairs",
+            "sample_order": [
+                sample["key"] for sample in SHORTEST_PATH_SAMPLES
+            ],
+        },
+        "translation_to_grakern": {
+            "grakern_pair_enumeration": (
+                "unordered off-diagonal reachable vertex pairs"
+            ),
+            "raw_gram_divisor": 4.0,
+            "reason": (
+                "each undirected pair is emitted twice by GraKeL, so the "
+                "unlabeled count vector is doubled and its Gram is quadrupled"
+            ),
+        },
+        "shortest_path_gram_flat": raw_gram.reshape(-1).tolist(),
+        "shortest_path_normalized_gram_flat": (
+            normalized_gram.reshape(-1).tolist()
+        ),
+    }
+
+
 def render(fixture: dict[str, Any]) -> str:
     return json.dumps(fixture, indent=2, sort_keys=True) + "\n"
 
@@ -199,24 +286,44 @@ def main() -> int:
     parser.add_argument(
         "--output",
         type=Path,
-        default=DEFAULT_OUTPUT,
+        default=DEFAULT_WL_OUTPUT,
+        help="WL fixture path retained for command compatibility",
+    )
+    parser.add_argument(
+        "--shortest-path-output",
+        type=Path,
+        default=DEFAULT_SHORTEST_PATH_OUTPUT,
     )
     arguments = parser.parse_args()
-    output = render(build_fixture())
+    outputs = {
+        arguments.output: render(build_wl_fixture()),
+        arguments.shortest_path_output: render(
+            build_shortest_path_fixture()
+        ),
+    }
 
     if arguments.check:
-        committed = arguments.output.read_text(encoding="utf-8")
-        if committed != output:
-            raise SystemExit(
-                f"GraKeL fixture drift: {arguments.output}"
-            )
+        for path, rendered in outputs.items():
+            committed = path.read_text(encoding="utf-8")
+            if committed != rendered:
+                raise SystemExit(f"GraKeL fixture drift: {path}")
         return 0
     if arguments.write:
-        arguments.output.parent.mkdir(parents=True, exist_ok=True)
-        arguments.output.write_text(output, encoding="utf-8")
+        for path, rendered in outputs.items():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(rendered, encoding="utf-8")
         return 0
 
-    print(output, end="")
+    print(
+        json.dumps(
+            {
+                str(path): json.loads(rendered)
+                for path, rendered in outputs.items()
+            },
+            indent=2,
+            sort_keys=True,
+        )
+    )
     return 0
 
 

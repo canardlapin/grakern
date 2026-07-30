@@ -4,10 +4,12 @@ These fixtures detect compatibility drift for configurations that Grakern and
 GraKeL define in the same way. They do not define Grakern's kernel semantics.
 The independent scalar and feature interpreters remain the semantic reference.
 
-The fixture covers normalized and unnormalized WL subtree and WL optimal
-assignment on categorical, undirected training and query graphs. It records
-the graph encoding, row and column order, split, iteration count,
-normalization policy, oracle versions, matrices, and comparison tolerances.
+The fixtures cover normalized and unnormalized WL subtree and WL optimal
+assignment on categorical, undirected training and query graphs, plus
+unlabeled shortest path on a uniform fixture. They record the graph encoding,
+row and column order, split, iteration count, normalization policy, oracle
+versions, matrices, comparison tolerances, and any translation needed to align
+pair conventions.
 
 GraKeL parity is deliberately narrower than Grakern's semantic court. In
 particular, it does not decide PSD validity, exact signature identity,
@@ -24,6 +26,7 @@ uv run \
   python tools/grakel/generate_fixtures.py --check
 ```
 
-Use `--write` only when deliberately accepting reviewed oracle drift. Ordinary
-Scala tests read the committed JSON resource and do not require Python,
-NumPy, or GraKeL.
+For shortest path, GraKeL's ordered-pair counts are translated explicitly to
+Grakern's unordered-pair denotation. Use `--write` only when deliberately
+accepting reviewed oracle drift. Ordinary Scala tests read the committed JSON
+resources and do not require Python, NumPy, or GraKeL.

@@ -24,6 +24,10 @@ JULIA_DEPOT_PATH=/tmp/grakern-graphkernels-julia \
   tools/graphkernels-jl/generate_fixtures.jl --check
 ```
 
+The shortest-path fixture records two audited differences rather than hiding
+them: ordered vertex-pair enumeration and addition of endpoint-kernel scores.
+On its constant-kernel corpus these yield a declared factor-of-eight
+translation to Grakern's unordered categorical denotation.
+
 Use `--write` only after reviewing intentional oracle drift. Ordinary Scala
-tests consume the fixture without requiring Julia. Shortest-path parity is
-deferred until Grakern's E6 path semantics are frozen.
+tests consume the fixtures without requiring Julia.
