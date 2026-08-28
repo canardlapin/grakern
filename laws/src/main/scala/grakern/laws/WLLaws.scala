@@ -268,7 +268,7 @@ object WLLaws extends Laws:
         )
       },
       "threshold features are monotone in the threshold" -> forAll(thresholdHierarchy) {
-        case (hierarchy, bag) =>
+        case (hierarchy, bag, _) =>
           val features = hierarchy.thresholdFeatures(bag).map(_._1)
           features.forall(f =>
             f.multiplicityThreshold == 1 ||
@@ -276,16 +276,14 @@ object WLLaws extends Laws:
           )
       },
       "optimal assignment is monotone under bag growth" -> forAll(thresholdHierarchy) {
-        case (hierarchy, bag) =>
-          val items = hierarchy.nodes.toVector.collect { case WLReference.Node.Colour(i) => i }
-          items.isEmpty || {
-            val grown = FiniteBag(bag.items :+ items.head)
-            hierarchy.optimalAssignment(grown, bag) >= hierarchy.optimalAssignment(bag, bag) - 1e-9
-          }
+        case (hierarchy, bag, leafItems) =>
+          val grown = FiniteBag(bag.items :+ leafItems.head)
+          hierarchy.optimalAssignment(grown, bag) >= hierarchy.optimalAssignment(bag, bag) - 1e-9
       }
     )
 
-  private val thresholdHierarchy: Gen[(Hierarchy[Int, WLReference.Node], FiniteBag[Int])] =
+  private val thresholdHierarchy
+      : Gen[(Hierarchy[Int, WLReference.Node], FiniteBag[Int], Vector[Int])] =
     for
       depth <- Gen.choose(1, 3)
       width <- Gen.choose(1, 3)
@@ -313,4 +311,8 @@ object WLLaws extends Laws:
           case Right(h)    => h
           case Left(error) => throw new IllegalStateException(s"hierarchy: $error")
       val leafItems = leaves.map(_._1)
-      (hierarchy, FiniteBag(picks.toVector.map(p => leafItems(p % leafItems.size))))
+      (
+        hierarchy,
+        FiniteBag(picks.toVector.map(p => leafItems(p % leafItems.size))),
+        leafItems
+      )

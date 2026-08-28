@@ -5,14 +5,14 @@ import cats.kernel.Hash
 import grakern.core.*
 import grakern.standard.wl.*
 
-/** A portable reference evaluator for WL kernel programs.
+/** A portable production-semantic evaluator for WL kernel programs.
   *
-  * This is a law oracle, not the feature emitter: it traces samples jointly through the exact
-  * [[WLInternerBuilder]] so colours are comparable across graphs, then evaluates subtree kernels as
-  * weighted histogram dot products and optimal-assignment kernels through the core [[Hierarchy]]
-  * built exactly as the JVM engine builds it (root, one node per colour, parent = previous colour,
-  * height = level + 1, leaves = final-round colours). The JVM parity suite ties these values to
-  * `WLCompiledKernel.kernel`.
+  * This is not the feature emitter: it traces samples jointly through [[WLInternerBuilder]] so
+  * colours are comparable across graphs, then evaluates subtree kernels as weighted histogram dot
+  * products and optimal-assignment kernels through the core [[Hierarchy]]. It intentionally shares
+  * the standard module's interning and hierarchy semantics; consequently it checks portable kernel
+  * algebra and JVM feature-emitter parity, but is not an independent oracle for those shared
+  * internals. The JVM parity suite ties these values to `WLCompiledKernel.kernel`.
   */
 final class WLReference[V, N, E, NodeKey, EdgeKey] private (
     val rounds: Int,

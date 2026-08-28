@@ -68,6 +68,18 @@ final class LawsSuite extends DisciplineSuite:
 
   checkAll("wl directed (G1, G2)", WLLaws.directedLaws)
 
+  test("portable eigen oracle recognizes analytic PSD and indefinite matrices"):
+    val diagonal = Array(Array(3.0, 0.0), Array(0.0, -2.0))
+    val positive = Array(Array(2.0, 1.0), Array(1.0, 2.0))
+    val indefinite = Array(Array(1.0, 2.0), Array(2.0, 1.0))
+    assertEqualsDouble(SymmetricEigen.minEigenvalue(diagonal), -2.0, 1e-12)
+    assertEqualsDouble(SymmetricEigen.minEigenvalue(positive), 1.0, 1e-12)
+    assertEqualsDouble(SymmetricEigen.minEigenvalue(indefinite), -1.0, 1e-12)
+
+  test("portable eigen oracle recognizes a singular Gram matrix"):
+    val rankOne = Array(Array(1.0, 2.0, 3.0), Array(2.0, 4.0, 6.0), Array(3.0, 6.0, 9.0))
+    assertEqualsDouble(SymmetricEigen.minEigenvalue(rankOne), 0.0, 1e-10)
+
   test("reference evaluator: hand oracle for the subtree kernel at rounds = 1"):
     // Two vertices a-b (edge e) versus a single a: round 0 shares one 'a'; round 1 differs.
     val pair = LabelledGraph(Vector("a", "b"), Vector((0, 1, "e")), directed = false)
