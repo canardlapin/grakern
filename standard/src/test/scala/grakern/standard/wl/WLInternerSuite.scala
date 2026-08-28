@@ -27,7 +27,11 @@ final class WLInternerSuite extends FunSuite:
       withOxygen
         .internRefined(
           carbon,
-          Vector(1 -> carbon, 2 -> oxygen, 1 -> carbon)
+          Vector(
+            WLIncidence.undirected(1, carbon),
+            WLIncidence.undirected(2, oxygen),
+            WLIncidence.undirected(1, carbon)
+          )
         )
         .toOption
         .get
@@ -35,7 +39,11 @@ final class WLInternerSuite extends FunSuite:
       firstState
         .internRefined(
           carbon,
-          Vector(1 -> carbon, 1 -> carbon, 2 -> oxygen)
+          Vector(
+            WLIncidence.undirected(1, carbon),
+            WLIncidence.undirected(1, carbon),
+            WLIncidence.undirected(2, oxygen)
+          )
         )
         .toOption
         .get
@@ -53,12 +61,12 @@ final class WLInternerSuite extends FunSuite:
     val (secondState, oxygen) = firstState.internInitial("O")
     val (thirdState, carbonRefined) =
       secondState
-        .internRefined(carbon, Vector(1 -> oxygen))
+        .internRefined(carbon, Vector(WLIncidence.undirected(1, oxygen)))
         .toOption
         .get
     val (fourthState, oxygenRefined) =
       thirdState
-        .internRefined(oxygen, Vector(1 -> carbon))
+        .internRefined(oxygen, Vector(WLIncidence.undirected(1, carbon)))
         .toOption
         .get
 
@@ -74,7 +82,7 @@ final class WLInternerSuite extends FunSuite:
 
     assert(
       firstState
-        .internRefined(firstColour, Vector(1 -> secondColour))
+        .internRefined(firstColour, Vector(WLIncidence.undirected(1, secondColour)))
         .left
         .exists {
           case WLInternerError.ForeignColour(colour) =>
@@ -90,7 +98,7 @@ final class WLInternerSuite extends FunSuite:
     val (firstB, oxygenA) = firstA.internInitial("O")
     val (firstFinal, refinedA) =
       firstB
-        .internRefined(carbonA, Vector(1 -> oxygenA))
+        .internRefined(carbonA, Vector(WLIncidence.undirected(1, oxygenA)))
         .toOption
         .get
 
@@ -100,7 +108,7 @@ final class WLInternerSuite extends FunSuite:
     val (secondC, _) = secondB.internInitial("unused")
     val (secondFinal, refinedB) =
       secondC
-        .internRefined(carbonB, Vector(1 -> oxygenB))
+        .internRefined(carbonB, Vector(WLIncidence.undirected(1, oxygenB)))
         .toOption
         .get
 

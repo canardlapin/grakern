@@ -27,7 +27,7 @@ final class WLInternerBuilderSuite extends FunSuite:
       builder
         .internRefined(
           carbon,
-          Vector(1 -> oxygen)
+          Vector(WLIncidence.undirected(1, oxygen))
         )
         .toOption
         .get
@@ -35,7 +35,7 @@ final class WLInternerBuilderSuite extends FunSuite:
       builder
         .internRefined(
           carbon,
-          Vector(1 -> oxygen)
+          Vector(WLIncidence.undirected(1, oxygen))
         )
         .toOption
         .get
@@ -43,7 +43,7 @@ final class WLInternerBuilderSuite extends FunSuite:
       builder
         .internRefined(
           carbon,
-          Vector(2 -> oxygen)
+          Vector(WLIncidence.undirected(2, oxygen))
         )
         .toOption
         .get

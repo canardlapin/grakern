@@ -38,8 +38,22 @@ private[wl] object WLColour:
   def create(owner: ColourOwner, index: Int, level: Int): WLColour =
     new WLColour(owner, index, level)
 
+/** One element of a refinement neighbourhood: the edge key, the orientation of that edge relative
+  * to the vertex being refined, and the neighbour's previous colour.
+  */
+final case class WLIncidence[+E](
+    edgeKey: E,
+    orientation: Orientation,
+    colour: WLColour
+)
+
+object WLIncidence:
+  def undirected[E](edgeKey: E, colour: WLColour): WLIncidence[E] =
+    WLIncidence(edgeKey, Orientation.Undirected, colour)
+
 final class WLNeighbour[E] private[wl] (
     val edgeKey: E,
+    val orientation: Orientation,
     val colour: WLColour
 )
 
@@ -114,7 +128,7 @@ final case class WLCodecs[N, E](
         val edgeCodec = edge.get
         Fingerprintability.Durable(
           SemanticFingerprint.compose(
-            schema = "grakern.wl-codecs.v1",
+            schema = "grakern.wl-codecs.v2",
             atoms = Vector(
               nodeCodec.id.text,
               nodeCodec.version.number.toString,
@@ -126,6 +140,16 @@ final case class WLCodecs[N, E](
         )
 
 private[wl] object WLDescriptor:
+  /** Stable spelling of an orientation inside a durable descriptor. Version 2 of the neighbour
+    * schema introduced this atom; undirected-era descriptors (v1) are deliberately incompatible so
+    * cached artifacts are never reused across the change.
+    */
+  private def orientationAtom(orientation: Orientation): String =
+    orientation match
+      case Orientation.Outgoing   => "out"
+      case Orientation.Incoming   => "in"
+      case Orientation.Undirected => "undirected"
+
   def initial[N](
       nodeKey: N,
       codec: Option[StableCodec[N]]
@@ -145,21 +169,22 @@ private[wl] object WLDescriptor:
   def refined[E](
       level: Int,
       parent: Option[SemanticFingerprint],
-      neighbours: Vector[(E, Option[SemanticFingerprint])],
+      neighbours: Vector[(E, Orientation, Option[SemanticFingerprint])],
       codec: Option[StableCodec[E]]
   ): Option[SemanticFingerprint] =
     for
       parentDescriptor <- parent
       edgeCodec <- codec
       neighbourDescriptors <- sequence(
-        neighbours.map { case (edgeKey, signature) =>
+        neighbours.map { case (edgeKey, orientation, signature) =>
           signature.map { child =>
             SemanticFingerprint.compose(
-              schema = "grakern.wl-signature.neighbour.v1",
+              schema = "grakern.wl-signature.neighbour.v2",
               atoms = Vector(
                 edgeCodec.id.text,
                 edgeCodec.version.number.toString,
-                edgeCodec.encode(edgeKey)
+                edgeCodec.encode(edgeKey),
+                orientationAtom(orientation)
               ),
               children = Vector(child)
             )
@@ -167,7 +192,7 @@ private[wl] object WLDescriptor:
         }
       )
     yield SemanticFingerprint.compose(
-      schema = "grakern.wl-signature.refined.v1",
+      schema = "grakern.wl-signature.refined.v2",
       atoms = Vector(level.toString),
       children = parentDescriptor +:
         neighbourDescriptors.sortBy(_.value)

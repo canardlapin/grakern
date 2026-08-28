@@ -2,7 +2,6 @@ package grakern.engine
 
 import cats.kernel.Eq
 import grakern.core.*
-import grakern.graph4s.GraphSample
 
 /** Private E1 walking skeleton.
   *
@@ -12,7 +11,7 @@ import grakern.graph4s.GraphSample
   */
 private[grakern] object WalkingSkeleton:
   def prepare[V, N, E, C: Eq](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       nodeKey: Projection[N, C],
       equalityId: StableId,
       labelCodec: StableId,

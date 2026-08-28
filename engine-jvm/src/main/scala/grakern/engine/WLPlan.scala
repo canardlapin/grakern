@@ -2,7 +2,6 @@ package grakern.engine
 
 import cats.kernel.Hash
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 
 enum WLPlanNodeKind derives CanEqual:
@@ -122,7 +121,7 @@ final case class WLPlanOptions(
 )
 
 final class WLPlan[V, N, E, NodeKey, EdgeKey] private[engine] (
-    private[engine] val samples: Vector[GraphSample[V, N, E]],
+    private[engine] val samples: Vector[LabelledNeighbourhood[V, N, E]],
     private[engine] val kernel: WLKernel[N, E, NodeKey, EdgeKey],
     val options: WLPlanOptions,
     val graph: WLPlanGraph,
@@ -146,7 +145,7 @@ object WLPlan:
       NodeKey: Hash,
       EdgeKey: Hash
   ](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       kernel: WLKernel[N, E, NodeKey, EdgeKey],
       options: WLPlanOptions
   ): WLPlan[V, N, E, NodeKey, EdgeKey] =

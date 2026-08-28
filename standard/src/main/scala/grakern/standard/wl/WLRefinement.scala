@@ -21,7 +21,8 @@ final class WLRefinement[N, E, NodeKey, EdgeKey] private (
 ) extends Refinement:
   def fingerprintability: Fingerprintability =
     Fingerprintability.combine(
-      schema = "grakern.wl-refinement.v1",
+      // v2: neighbourhoods carry orientation relative to the refined vertex (ADR-009).
+      schema = "grakern.wl-refinement.v2",
       atoms = Vector(rounds.toString),
       children = Vector(
         nodeKey.fingerprintAt(planNodeId),

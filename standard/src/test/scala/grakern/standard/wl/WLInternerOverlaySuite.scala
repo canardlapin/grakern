@@ -16,7 +16,7 @@ final class WLInternerOverlaySuite extends FunSuite:
     val (withOxygen, oxygen) = withCarbon.internInitial("O")
     val (complete, refined) =
       withOxygen
-        .internRefined(carbon, Vector(1 -> oxygen))
+        .internRefined(carbon, Vector(WLIncidence.undirected(1, oxygen)))
         .toOption
         .get
     (complete, carbon, oxygen, refined)
@@ -28,7 +28,7 @@ final class WLInternerOverlaySuite extends FunSuite:
     val (withOxygen, queryOxygen) = withCarbon.internInitial("O")
     val (complete, queryRefined) =
       withOxygen
-        .internRefined(queryCarbon, Vector(1 -> queryOxygen))
+        .internRefined(queryCarbon, Vector(WLIncidence.undirected(1, queryOxygen)))
         .toOption
         .get
 
@@ -44,7 +44,7 @@ final class WLInternerOverlaySuite extends FunSuite:
       empty
         .internRefined(
           carbon,
-          Vector(1 -> oxygen, 1 -> oxygen)
+          Vector(WLIncidence.undirected(1, oxygen), WLIncidence.undirected(1, oxygen))
         )
         .toOption
         .get
@@ -62,12 +62,12 @@ final class WLInternerOverlaySuite extends FunSuite:
     val secondStart = WLInternerOverlay(base)
     val (first, firstNovel) =
       firstStart
-        .internRefined(carbon, Vector(2 -> oxygen))
+        .internRefined(carbon, Vector(WLIncidence.undirected(2, oxygen)))
         .toOption
         .get
     val (second, secondNovel) =
       secondStart
-        .internRefined(carbon, Vector(2 -> oxygen))
+        .internRefined(carbon, Vector(WLIncidence.undirected(2, oxygen)))
         .toOption
         .get
 

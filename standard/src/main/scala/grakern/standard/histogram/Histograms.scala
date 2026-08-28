@@ -1,7 +1,6 @@
 package grakern.standard.histogram
 
 import grakern.core.*
-import grakern.graph4s.GraphSample
 
 enum HistogramFeatureKind derives CanEqual:
   case Vertex
@@ -14,7 +13,7 @@ final case class HistogramFeature[+Key](
 
 enum HistogramWitness[V]:
   case Vertex(sample: SampleKey, vertex: V)
-  case Edge(sample: SampleKey, edge: graph4s.Edge[V])
+  case Edge(sample: SampleKey, edge: EdgeRef[V])
 
 final case class HistogramOccurrence[V, +Key](
     feature: HistogramFeature[Key],
@@ -29,14 +28,14 @@ final class HistogramRecipe[N, E, Key] private[histogram] (
     emitter.fingerprintability(planNodeId)
 
   def decomposition[V]: Decomposition[
-    GraphSample[V, N, E],
+    LabelledNeighbourhood[V, N, E],
     HistogramOccurrence[V, Key]
   ] =
     emitter.decomposition
 
 sealed private[grakern] trait HistogramEmitter[N, E, Key]:
   def decomposition[V]: Decomposition[
-    GraphSample[V, N, E],
+    LabelledNeighbourhood[V, N, E],
     HistogramOccurrence[V, Key]
   ]
 
@@ -49,49 +48,40 @@ private[histogram] object HistogramEmitter:
       key: Projection[N, Key]
   ) extends HistogramEmitter[N, E, Key]:
     def decomposition[V]: Decomposition[
-      GraphSample[V, N, E],
+      LabelledNeighbourhood[V, N, E],
       HistogramOccurrence[V, Key]
     ] =
       new Decomposition[
-        GraphSample[V, N, E],
+        LabelledNeighbourhood[V, N, E],
         HistogramOccurrence[V, Key]
       ]:
         def foreachWeighted(
-            sample: GraphSample[V, N, E]
+            sample: LabelledNeighbourhood[V, N, E]
         )(
             emit: (
                 HistogramOccurrence[V, Key],
                 NonNegativeFinite
             ) => Either[DecompositionError, Unit]
         ): Either[DecompositionError, Unit] =
-          val vertices = sample.topology.vertices.iterator
+          val vertices = sample.vertices.iterator
           var failure: Option[DecompositionError] = None
           while vertices.hasNext && failure.isEmpty do
             val vertex = vertices.next()
-            sample.nodeValue(vertex) match
-              case Some(value) =>
-                emit(
-                  HistogramOccurrence(
-                    HistogramFeature(
-                      HistogramFeatureKind.Vertex,
-                      key(value)
-                    ),
-                    HistogramWitness.Vertex(
-                      sample.key,
-                      vertex
-                    )
-                  ),
-                  NonNegativeFinite.one
-                ) match
-                  case Left(error) => failure = Some(error)
-                  case Right(_)    => ()
-              case None =>
-                failure = Some(
-                  DecompositionError.InvariantViolation(
-                    sample.key,
-                    DecompositionInvariant.TotalNodeField
-                  )
+            emit(
+              HistogramOccurrence(
+                HistogramFeature(
+                  HistogramFeatureKind.Vertex,
+                  key(sample.nodeValue(vertex))
+                ),
+                HistogramWitness.Vertex(
+                  sample.key,
+                  vertex
                 )
+              ),
+              NonNegativeFinite.one
+            ) match
+              case Left(error) => failure = Some(error)
+              case Right(_)    => ()
           failure.toLeft(())
 
     def fingerprintability(
@@ -107,46 +97,37 @@ private[histogram] object HistogramEmitter:
       key: Projection[E, Key]
   ) extends HistogramEmitter[N, E, Key]:
     def decomposition[V]: Decomposition[
-      GraphSample[V, N, E],
+      LabelledNeighbourhood[V, N, E],
       HistogramOccurrence[V, Key]
     ] =
       new Decomposition[
-        GraphSample[V, N, E],
+        LabelledNeighbourhood[V, N, E],
         HistogramOccurrence[V, Key]
       ]:
         def foreachWeighted(
-            sample: GraphSample[V, N, E]
+            sample: LabelledNeighbourhood[V, N, E]
         )(
             emit: (
                 HistogramOccurrence[V, Key],
                 NonNegativeFinite
             ) => Either[DecompositionError, Unit]
         ): Either[DecompositionError, Unit] =
-          val edges = sample.topology.edges.iterator
+          val edges = Neighbourhoods.canonicalEdges(sample).iterator
           var failure: Option[DecompositionError] = None
           while edges.hasNext && failure.isEmpty do
             val edge = edges.next()
-            sample.edgeValue(edge) match
-              case Some(value) =>
-                emit(
-                  HistogramOccurrence(
-                    HistogramFeature(
-                      HistogramFeatureKind.Edge,
-                      key(value)
-                    ),
-                    HistogramWitness.Edge(sample.key, edge)
-                  ),
-                  NonNegativeFinite.one
-                ) match
-                  case Left(error) => failure = Some(error)
-                  case Right(_)    => ()
-              case None =>
-                failure = Some(
-                  DecompositionError.InvariantViolation(
-                    sample.key,
-                    DecompositionInvariant.TotalEdgeField
-                  )
-                )
+            emit(
+              HistogramOccurrence(
+                HistogramFeature(
+                  HistogramFeatureKind.Edge,
+                  key(edge.value)
+                ),
+                HistogramWitness.Edge(sample.key, edge.ref)
+              ),
+              NonNegativeFinite.one
+            ) match
+              case Left(error) => failure = Some(error)
+              case Right(_)    => ()
           failure.toLeft(())
 
     def fingerprintability(

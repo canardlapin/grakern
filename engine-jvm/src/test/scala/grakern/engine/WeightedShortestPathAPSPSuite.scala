@@ -218,7 +218,7 @@ final class WeightedShortestPathAPSPSuite extends FunSuite:
         case Left(
               WeightedShortestPathAPSPError.EdgeProjection(
                 PrepareError.InvalidNumeric(
-                  SourceRef.Edge(sample, _: Edge[?]),
+                  SourceRef.Edge(sample, _: EdgeRef[?]),
                   projection,
                   value,
                   reason
