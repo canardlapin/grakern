@@ -1,0 +1,1 @@
+{"actor":"claude-storymodel4s","entity":"bd-01M14DC6B8W856A24B0TBSA5QH","kind":"create","op":"20260828T144625.896169Z-p9639-c0000-refd6-hd64528","set":{"priority":2,"status":"open","title":"Publish grakern 0.1.0-M1 (with graph4s/gale pins resolved to artifacts or documented SHAs) so consumers can replace ProjectRef pins"},"ts":"2026-08-28T14:46:25.896169Z","v":1}
