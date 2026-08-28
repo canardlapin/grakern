@@ -115,7 +115,7 @@ lazy val laws = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 
 lazy val engineJVM = project
   .in(file("engine-jvm"))
-  .dependsOn(core.jvm, graph4sAdapter.jvm, standard.jvm, galeCoreJVM)
+  .dependsOn(core.jvm, graph4sAdapter.jvm, standard.jvm, galeCoreJVM, laws.jvm % "test->compile")
   .settings(strictSettings)
   .settings(name := "grakern-engine-jvm")
 
