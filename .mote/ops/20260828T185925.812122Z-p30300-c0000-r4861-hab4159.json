@@ -1,0 +1,1 @@
+{"actor":"codex-grakern-open-motes","entity":"bd-01M14DC5X97MEQGQ6BDC4K34ZE","kind":"reserve_open","mode":"exclusive","op":"20260828T185925.812122Z-p30300-c0000-r4861-hab4159","paths":["engine-jvm/src/main/scala/grakern/engine/ExactFeatureNumericalViews.scala"],"reservation_id":"rv-01M14VVEFM5VTZ2HN6070TASAX","ts":"2026-08-28T18:59:25.812122Z","ttl_s":3600,"v":1}

@@ -1,0 +1,1 @@
+{"actor":"codex-grakern-open-motes","entity":"grakern-e7-centering","kind":"note","note_kind":"progress","op":"20260828T190529.544270Z-p39654-c0003-rd1e3-hdfe6be","text":"Implement an explicit prepared-only centering wrapper with frozen training statistics, centered feature/Gram/operator views, and query cross centering","ts":"2026-08-28T19:05:29.544270Z","v":1}
