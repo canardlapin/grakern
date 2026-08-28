@@ -3,7 +3,6 @@ package grakern.engine
 import cats.kernel.Hash
 import gale.linalg.LinAlgError
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 
 enum WLCompiledFeature:
@@ -92,7 +91,7 @@ final class WLCompiledKernel[V, N, E, NodeKey, EdgeKey] private[engine] (
     )
 
   def cross[QueryV](
-      samples: Vector[GraphSample[QueryV, N, E]]
+      samples: Vector[LabelledNeighbourhood[QueryV, N, E]]
   ): Either[WLQueryCompileError[QueryV], WLQueryResult] =
     WLQueryAlignment.prepare(this, samples)
 
@@ -111,7 +110,7 @@ object WLCompiler:
       NodeKey: Hash,
       EdgeKey: Hash
   ](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       kernel: WLKernel[N, E, NodeKey, EdgeKey],
       options: WLPlanOptions = WLPlanOptions()
   ): WLPlan[V, N, E, NodeKey, EdgeKey] =

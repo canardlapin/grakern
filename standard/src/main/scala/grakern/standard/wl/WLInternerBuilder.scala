@@ -42,7 +42,7 @@ final private[grakern] class WLInternerBuilder[N, E] private (
 
   def internRefined(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, WLColour] =
     validateReferences(parent, neighbourhood).map { _ =>
       val level = parent.level + 1
@@ -54,16 +54,18 @@ final private[grakern] class WLInternerBuilder[N, E] private (
           val colour =
             WLColour.create(owner, nodes.size, level)
           val neighbours =
-            neighbourhood.map { case (edgeKey, neighbour) =>
-              new WLNeighbour(edgeKey, neighbour)
+            neighbourhood.map { incidence =>
+              new WLNeighbour(incidence.edgeKey, incidence.orientation, incidence.colour)
             }
           val descriptor =
             WLDescriptor.refined(
               level,
               signature(parent).flatMap(_.stableDescriptor),
-              neighbourhood.map { case (edgeKey, neighbour) =>
-                edgeKey -> signature(neighbour).flatMap(
-                  _.stableDescriptor
+              neighbourhood.map { incidence =>
+                (
+                  incidence.edgeKey,
+                  incidence.orientation,
+                  signature(incidence.colour).flatMap(_.stableDescriptor)
                 )
               },
               codecs.edge
@@ -122,7 +124,7 @@ final private[grakern] class WLInternerBuilder[N, E] private (
   private def findRefined(
       level: Int,
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Option[WLColour] =
     val hash =
       hashing.refined(level, parent, neighbourhood)
@@ -134,7 +136,8 @@ final private[grakern] class WLInternerBuilder[N, E] private (
         case refined: WLSignature.Refined[N, E]
             if refined.level == level &&
               refined.previous.equals(parent) &&
-              exactMultiset(
+              WLInterner.exactMultiset(
+                edgeHash,
                 refined.neighbourhood,
                 neighbourhood
               ) =>
@@ -145,13 +148,13 @@ final private[grakern] class WLInternerBuilder[N, E] private (
 
   private def validateReferences(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, Unit] =
     if !owns(parent) then Left(WLInternerError.ForeignColour(parent))
     else
       var index = 0
       while index < neighbourhood.size do
-        val colour = neighbourhood(index)._2
+        val colour = neighbourhood(index).colour
         if !owns(colour) then
           return Left(
             WLInternerError.ForeignColour(colour)
@@ -165,36 +168,6 @@ final private[grakern] class WLInternerBuilder[N, E] private (
           )
         index += 1
       Right(())
-
-  private def exactMultiset(
-      stored: Vector[WLNeighbour[E]],
-      incoming: Vector[(E, WLColour)]
-  ): Boolean =
-    if stored.size != incoming.size then false
-    else
-      val matched =
-        new Array[Boolean](incoming.size)
-      var storedIndex = 0
-      while storedIndex < stored.size do
-        val expected = stored(storedIndex)
-        var incomingIndex = 0
-        var found = false
-        while incomingIndex < incoming.size && !found do
-          if !matched(incomingIndex) &&
-            edgeHash.eqv(
-              expected.edgeKey,
-              incoming(incomingIndex)._1
-            ) &&
-            expected.colour.equals(
-              incoming(incomingIndex)._2
-            )
-          then
-            matched(incomingIndex) = true
-            found = true
-          incomingIndex += 1
-        if !found then return false
-        storedIndex += 1
-      true
 
   private def append(
       hash: Int,

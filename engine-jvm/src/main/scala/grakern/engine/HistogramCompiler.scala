@@ -3,7 +3,6 @@ package grakern.engine
 import cats.kernel.Hash
 import gale.linalg.LinAlgError
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.histogram.*
 
 final case class HistogramFeatureMetadata[+Key](
@@ -106,7 +105,7 @@ final class CompiledHistogramKernel[V, Key] private[engine] (
 
 object HistogramCompiler:
   def prepare[V, N, E, Key: Hash](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       recipe: HistogramRecipe[N, E, Key],
       gramExecution: GramExecution = GramExecution.Sequential
   ): Either[

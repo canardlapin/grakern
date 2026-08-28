@@ -2,9 +2,7 @@ package grakern.engine
 
 import cats.kernel.Hash
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
-import scala.collection.mutable.ArrayBuffer
 
 enum WLTraceError[V]:
   case Packing(error: PackedCorpusError[V])
@@ -63,6 +61,30 @@ final class WLTrace[V, NodeKey, EdgeKey] private[engine] (
     yield range.iterator.map(colours).toVector
 
 private[grakern] object WLTrace:
+  /** The refinement neighbourhood of one packed vertex: its adjacency entries in incidence order,
+    * each carrying the projected edge key and the orientation relative to that vertex.
+    */
+  private[engine] def incidentKeys[V, N, E, NodeKey, EdgeKey](
+      packed: PackedGraphCorpus[V, N, E],
+      refinement: WLRefinement[N, E, NodeKey, EdgeKey]
+  ): Array[Vector[(Int, EdgeKey, Orientation)]] =
+    val edgeKeys = packed.packedEdges.map(edge => refinement.edgeKey(edge.value))
+    Array.tabulate(packed.vertexCount) { vertexIndex =>
+      val builder = Vector.newBuilder[(Int, EdgeKey, Orientation)]
+      var adjacencyIndex = packed.adjacencyStart(vertexIndex)
+      val end = packed.adjacencyEnd(vertexIndex)
+      while adjacencyIndex < end do
+        builder += (
+          (
+            packed.adjacencyTarget(adjacencyIndex),
+            edgeKeys(packed.adjacencyEdge(adjacencyIndex)),
+            packed.adjacencyOrientation(adjacencyIndex)
+          )
+        )
+        adjacencyIndex += 1
+      builder.result()
+    }
+
   def prepare[
       V,
       N,
@@ -70,7 +92,7 @@ private[grakern] object WLTrace:
       NodeKey: Hash,
       EdgeKey: Hash
   ](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       refinement: WLRefinement[N, E, NodeKey, EdgeKey]
   ): Either[WLTraceError[V], WLTrace[V, NodeKey, EdgeKey]] =
     PackedGraphCorpus
@@ -91,15 +113,7 @@ private[grakern] object WLTrace:
   ): Either[WLTraceError[V], WLTrace[V, NodeKey, EdgeKey]] =
     val nodeKeys =
       packed.categoricalNodeColumn(value => refinement.nodeKey(value))
-    val incident =
-      Array.fill(packed.vertexCount)(
-        ArrayBuffer.empty[(Int, EdgeKey)]
-      )
-    packed.packedEdges.foreach { edge =>
-      val key = refinement.edgeKey(edge.value)
-      incident(edge.source) += ((edge.target, key))
-      incident(edge.target) += ((edge.source, key))
-    }
+    val incident = incidentKeys(packed, refinement)
     val sources =
       Vector.tabulate(packed.vertexCount) { vertexIndex =>
         WLSource(
@@ -126,9 +140,9 @@ private[grakern] object WLTrace:
       var vertexIndex = 0
       while vertexIndex < packed.vertexCount && failure.isEmpty do
         val neighbourhood =
-          incident(vertexIndex).iterator.map { case (target, edgeKey) =>
-            edgeKey -> previous(target)
-          }.toVector
+          incident(vertexIndex).map { case (target, edgeKey, orientation) =>
+            WLIncidence(edgeKey, orientation, previous(target))
+          }
         interner.internRefined(
           previous(vertexIndex),
           neighbourhood

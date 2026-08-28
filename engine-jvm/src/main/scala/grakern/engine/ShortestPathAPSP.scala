@@ -1,7 +1,6 @@
 package grakern.engine
 
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.shortestpath.*
 import java.util.Arrays
 
@@ -157,7 +156,7 @@ private object UnweightedDistanceBlock:
 
 object ShortestPathAPSP:
   private[grakern] def prepare[V, N, E](
-      samples: Vector[GraphSample[V, N, E]]
+      samples: Vector[LabelledNeighbourhood[V, N, E]]
   ): Either[
     ShortestPathAPSPError[V],
     UnweightedAPSPTrace[V, N, E]
@@ -165,7 +164,7 @@ object ShortestPathAPSP:
     prepare(samples, PlanNodeId.fresh())
 
   private[engine] def prepare[V, N, E](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       planNodeId: PlanNodeId
   ): Either[
     ShortestPathAPSPError[V],

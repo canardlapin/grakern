@@ -3,7 +3,6 @@ package grakern.engine
 import gale.linalg.{DMat, DVec, LinAlgError}
 import gale.sparse.{CSR, DuplicatePolicy, Sparse}
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
 
 final case class AlignedFeatures[Coordinate](
@@ -67,7 +66,7 @@ private[grakern] object WLQueryAlignment:
         NodeKey,
         EdgeKey
       ],
-      samples: Vector[GraphSample[QueryV, N, E]]
+      samples: Vector[LabelledNeighbourhood[QueryV, N, E]]
   ): Either[WLQueryCompileError[QueryV], WLQueryResult] =
     var queryTraces = Vector.empty[
       (

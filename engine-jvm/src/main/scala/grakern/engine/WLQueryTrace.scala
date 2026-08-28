@@ -1,9 +1,7 @@
 package grakern.engine
 
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.wl.*
-import scala.collection.mutable.ArrayBuffer
 
 enum WLQueryTraceError[V]:
   case RefinementMismatch(
@@ -70,7 +68,7 @@ private[grakern] object WLQueryTrace:
       EdgeKey
   ](
       training: WLTrace[TrainingV, NodeKey, EdgeKey],
-      samples: Vector[GraphSample[QueryV, N, E]],
+      samples: Vector[LabelledNeighbourhood[QueryV, N, E]],
       refinement: WLRefinement[N, E, NodeKey, EdgeKey]
   ): Either[
     WLQueryTraceError[QueryV],
@@ -109,15 +107,7 @@ private[grakern] object WLQueryTrace:
   ] =
     val nodeKeys =
       packed.categoricalNodeColumn(value => refinement.nodeKey(value))
-    val incident =
-      Array.fill(packed.vertexCount)(
-        ArrayBuffer.empty[(Int, EdgeKey)]
-      )
-    packed.packedEdges.foreach { edge =>
-      val key = refinement.edgeKey(edge.value)
-      incident(edge.source) += ((edge.target, key))
-      incident(edge.target) += ((edge.source, key))
-    }
+    val incident = WLTrace.incidentKeys(packed, refinement)
     val sources =
       Vector.tabulate(packed.vertexCount) { vertexIndex =>
         WLSource(
@@ -142,9 +132,9 @@ private[grakern] object WLQueryTrace:
       var vertexIndex = 0
       while vertexIndex < packed.vertexCount && failure.isEmpty do
         val neighbourhood =
-          incident(vertexIndex).iterator.map { case (target, edgeKey) =>
-            edgeKey -> previous(target)
-          }.toVector
+          incident(vertexIndex).map { case (target, edgeKey, orientation) =>
+            WLIncidence(edgeKey, orientation, previous(target))
+          }
         overlay.internRefined(
           previous(vertexIndex),
           neighbourhood

@@ -2,7 +2,6 @@ package grakern.engine
 
 import cats.kernel.Hash
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.shortestpath.*
 
 enum ShortestPathAPSPAlgorithm derives CanEqual:
@@ -234,7 +233,7 @@ final case class CategoricalShortestPathPlanOptions(
 
 final class CategoricalShortestPathPlan[V, N, E, Key] private[engine] (
     private[engine] val samples: Vector[
-      GraphSample[V, N, E]
+      LabelledNeighbourhood[V, N, E]
     ],
     private[engine] val recipe: UnweightedShortestPathRecipe[
       N,
@@ -256,7 +255,7 @@ final case class SoftShortestPathPlanOptions(
 
 final class SoftShortestPathPlan[V, N, E, Key] private[engine] (
     private[engine] val samples: Vector[
-      GraphSample[V, N, E]
+      LabelledNeighbourhood[V, N, E]
     ],
     private[engine] val kernel: SoftShortestPathKernel[
       N,
@@ -291,7 +290,7 @@ final class PlannedSoftShortestPathKernel[V] private[engine] (
 
 object ShortestPathPlanner:
   def categorical[V, N, E, Key: Hash](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       recipe: UnweightedShortestPathRecipe[N, E, Key],
       options: CategoricalShortestPathPlanOptions = CategoricalShortestPathPlanOptions()
   ): CategoricalShortestPathPlan[V, N, E, Key] =
@@ -306,7 +305,7 @@ object ShortestPathPlanner:
     )
 
   def soft[V, N, E, Key](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       kernel: SoftShortestPathKernel[N, E, Key],
       options: SoftShortestPathPlanOptions = SoftShortestPathPlanOptions()
   ): SoftShortestPathPlan[V, N, E, Key] =

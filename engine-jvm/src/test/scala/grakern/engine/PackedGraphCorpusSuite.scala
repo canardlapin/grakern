@@ -135,7 +135,9 @@ final class PackedGraphCorpusSuite extends FunSuite:
             )
           ) =>
         assertEquals(sample, SampleKey("negative-edge"))
-        assertEquals(edge, topology.edges.head)
+        assertEquals(Set(edge.first, edge.second), Set(1, 2))
+        assertEquals(edge.orientation, Orientation.Undirected)
+        assertEquals(edge.ordinal, 0)
         assertEquals(
           projection,
           ProjectionDescriptor("bond.length")

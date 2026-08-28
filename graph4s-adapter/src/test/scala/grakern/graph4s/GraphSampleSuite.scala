@@ -25,8 +25,8 @@ final class GraphSampleSuite extends FunSuite:
       )
 
     assertEquals(sample.topology.vertexCount, 2)
-    assertEquals(sample.nodeValue(left), Some(carbon))
-    assertEquals(sample.nodeValue(right), Some(carbon))
+    assertEquals(sample.nodeValueOption(left), Some(carbon))
+    assertEquals(sample.nodeValueOption(right), Some(carbon))
     assertEquals(sample.nodes.size, 2)
 
   test("different samples may reuse graph-local vertex identifiers"):
@@ -42,8 +42,8 @@ final class GraphSampleSuite extends FunSuite:
         edgeValue = _ => Bond(1)
       )
 
-    assertEquals(first.nodeValue(AtomId(1)), Some(Atom("C")))
-    assertEquals(second.nodeValue(AtomId(1)), Some(Atom("N")))
+    assertEquals(first.nodeValueOption(AtomId(1)), Some(Atom("C")))
+    assertEquals(second.nodeValueOption(AtomId(1)), Some(Atom("N")))
 
   test("field-based construction rejects a node field from another topology"):
     val expected = Graph.singleton(AtomId(1))
@@ -69,4 +69,4 @@ final class GraphSampleSuite extends FunSuite:
     val result =
       GraphSample.fromFields(SampleKey("oxygen"), topology, nodes, edges)
 
-    assertEquals(result.map(_.nodeValue(AtomId(1))), Right(Some(Atom("O"))))
+    assertEquals(result.map(_.nodeValueOption(AtomId(1))), Right(Some(Atom("O"))))

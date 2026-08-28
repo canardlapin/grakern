@@ -1,6 +1,7 @@
 package grakern.standard.wl
 
 import cats.kernel.Hash
+import grakern.core.Orientation
 import scala.util.hashing.MurmurHash3
 
 trait WLHashStrategy[-N, -E]:
@@ -9,10 +10,16 @@ trait WLHashStrategy[-N, -E]:
   def refined(
       level: Int,
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Int
 
 object WLHashStrategy:
+  private def orientationSalt(orientation: Orientation): Int =
+    orientation match
+      case Orientation.Undirected => 0
+      case Orientation.Outgoing   => 0x2f1a7c3
+      case Orientation.Incoming   => 0x5b8d1e9
+
   def default[N: Hash, E: Hash]: WLHashStrategy[N, E] =
     new WLHashStrategy[N, E]:
       def initial(nodeKey: N): Int =
@@ -21,12 +28,15 @@ object WLHashStrategy:
       def refined(
           level: Int,
           parent: WLColour,
-          neighbourhood: Vector[(E, WLColour)]
+          neighbourhood: Vector[WLIncidence[E]]
       ): Int =
         val unordered =
-          neighbourhood.foldLeft(0) { case (current, (edgeKey, colour)) =>
+          neighbourhood.foldLeft(0) { (current, incidence) =>
             current +
-              MurmurHash3.mix(Hash[E].hash(edgeKey), colour.index)
+              MurmurHash3.mix(
+                Hash[E].hash(incidence.edgeKey) ^ orientationSalt(incidence.orientation),
+                incidence.colour.index
+              )
           }
         MurmurHash3.finalizeHash(
           MurmurHash3.mix(
@@ -43,7 +53,7 @@ object WLHashStrategy:
       def refined(
           level: Int,
           parent: WLColour,
-          neighbourhood: Vector[(E, WLColour)]
+          neighbourhood: Vector[WLIncidence[E]]
       ): Int = value
 
 enum WLInternerError:
@@ -55,8 +65,8 @@ enum WLInternerError:
 
 /** An immutable, hash-consed store of exact recursive WL signatures.
   *
-  * Hashes select candidate buckets only. Initial labels and refined edge/colour multisets are
-  * compared exactly before an existing colour is reused.
+  * Hashes select candidate buckets only. Initial labels and refined (edge key, orientation, colour)
+  * multisets are compared exactly before an existing colour is reused.
   */
 final class WLInterner[N, E] private[wl] (
     private[wl] val owner: ColourOwner,
@@ -97,7 +107,7 @@ final class WLInterner[N, E] private[wl] (
 
   def internRefined(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, (WLInterner[N, E], WLColour)] =
     validateReferences(parent, neighbourhood).map { _ =>
       val level = parent.level + 1
@@ -107,16 +117,18 @@ final class WLInterner[N, E] private[wl] (
           val hash = hashing.refined(level, parent, neighbourhood)
           val colour = WLColour.create(owner, nodes.size, level)
           val neighbours =
-            neighbourhood.map { case (edgeKey, neighbour) =>
-              new WLNeighbour(edgeKey, neighbour)
+            neighbourhood.map { incidence =>
+              new WLNeighbour(incidence.edgeKey, incidence.orientation, incidence.colour)
             }
           val descriptor =
             WLDescriptor.refined(
               level,
               signature(parent).flatMap(_.stableDescriptor),
-              neighbourhood.map { case (edgeKey, neighbour) =>
-                edgeKey -> signature(neighbour).flatMap(
-                  _.stableDescriptor
+              neighbourhood.map { incidence =>
+                (
+                  incidence.edgeKey,
+                  incidence.orientation,
+                  signature(incidence.colour).flatMap(_.stableDescriptor)
                 )
               },
               codecs.edge
@@ -173,14 +185,14 @@ final class WLInterner[N, E] private[wl] (
   private[wl] def findRefined(
       level: Int,
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Option[WLColour] =
     val hash = hashing.refined(level, parent, neighbourhood)
     candidates(hash).collectFirst {
       case refined: WLSignature.Refined[N, E]
           if refined.level == level &&
             refined.previous.equals(parent) &&
-            exactMultiset(refined.neighbourhood, neighbourhood) =>
+            WLInterner.exactMultiset(edgeHash, refined.neighbourhood, neighbourhood) =>
         refined.colour
     }
 
@@ -196,16 +208,16 @@ final class WLInterner[N, E] private[wl] (
 
   private def validateReferences(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, Unit] =
     if !owns(parent) then Left(WLInternerError.ForeignColour(parent))
     else
       neighbourhood
         .collectFirst {
-          case (_, colour) if !owns(colour) =>
-            WLInternerError.ForeignColour(colour)
-          case (_, colour) if colour.level != parent.level =>
-            WLInternerError.InvalidNeighbourLevel(parent, colour)
+          case incidence if !owns(incidence.colour) =>
+            WLInternerError.ForeignColour(incidence.colour)
+          case incidence if incidence.colour.level != parent.level =>
+            WLInternerError.InvalidNeighbourLevel(parent, incidence.colour)
         }
         .toLeft(())
 
@@ -225,27 +237,6 @@ final class WLInterner[N, E] private[wl] (
       buckets.updated(hash, updatedBucket)
     )
 
-  private def exactMultiset(
-      stored: Vector[WLNeighbour[E]],
-      incoming: Vector[(E, WLColour)]
-  ): Boolean =
-    if stored.size != incoming.size then false
-    else
-      val matched = Array.fill(incoming.size)(false)
-      stored.forall { expected =>
-        val index =
-          incoming.indices.find { candidate =>
-            !matched(candidate) &&
-            edgeHash.eqv(
-              expected.edgeKey,
-              incoming(candidate)._1
-            ) &&
-            expected.colour.equals(incoming(candidate)._2)
-          }
-        index.foreach(candidate => matched(candidate) = true)
-        index.nonEmpty
-      }
-
   private def exactCrossTraceMultiset(
       left: Vector[WLNeighbour[E]],
       that: WLInterner[N, E],
@@ -262,6 +253,7 @@ final class WLInterner[N, E] private[wl] (
               expected.edgeKey,
               right(candidate).edgeKey
             ) &&
+            expected.orientation == right(candidate).orientation &&
             semanticallyEquivalent(
               expected.colour,
               that,
@@ -291,3 +283,29 @@ object WLInterner:
       Vector.empty,
       Map.empty
     )
+
+  /** Exact multiset equality of a stored neighbourhood against an incoming one: edge key under
+    * `Hash[E]`, orientation, and colour must all match with multiplicity.
+    */
+  private[wl] def exactMultiset[E](
+      edgeHash: Hash[E],
+      stored: Vector[WLNeighbour[E]],
+      incoming: Vector[WLIncidence[E]]
+  ): Boolean =
+    if stored.size != incoming.size then false
+    else
+      val matched = Array.fill(incoming.size)(false)
+      stored.forall { expected =>
+        val index =
+          incoming.indices.find { candidate =>
+            !matched(candidate) &&
+            edgeHash.eqv(
+              expected.edgeKey,
+              incoming(candidate).edgeKey
+            ) &&
+            expected.orientation == incoming(candidate).orientation &&
+            expected.colour.equals(incoming(candidate).colour)
+          }
+        index.foreach(candidate => matched(candidate) = true)
+        index.nonEmpty
+      }

@@ -36,7 +36,7 @@ final class WLSignatureSuite extends FunSuite:
       WLSignature.refined[String, Int](
         refinedColour,
         parent,
-        Vector(new WLNeighbour(2, neighbour)),
+        Vector(new WLNeighbour(2, Orientation.Undirected, neighbour)),
         None
       )
 
@@ -55,14 +55,14 @@ final class WLSignatureSuite extends FunSuite:
       WLDescriptor.refined(
         1,
         carbon,
-        Vector(1 -> carbon, 2 -> oxygen),
+        Vector((1, Orientation.Undirected, carbon), (2, Orientation.Undirected, oxygen)),
         Some(edgeCodec)
       )
     val reversed =
       WLDescriptor.refined(
         1,
         carbon,
-        Vector(2 -> oxygen, 1 -> carbon),
+        Vector((2, Orientation.Undirected, oxygen), (1, Orientation.Undirected, carbon)),
         Some(edgeCodec)
       )
 

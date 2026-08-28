@@ -43,15 +43,13 @@ final class WLInternerOverlay[N, E] private[wl] (
 
   def internRefined(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, (WLInternerOverlay[N, E], WLColour)] =
     validateReferences(parent, neighbourhood).map { _ =>
       val level = parent.level + 1
       val known =
         if base.owns(parent) &&
-          neighbourhood.forall { case (_, colour) =>
-            base.owns(colour)
-          }
+          neighbourhood.forall(incidence => base.owns(incidence.colour))
         then base.findRefined(level, parent, neighbourhood)
         else None
 
@@ -65,16 +63,18 @@ final class WLInternerOverlay[N, E] private[wl] (
           val colour =
             WLColour.create(localOwner, localNodes.size, level)
           val neighbours =
-            neighbourhood.map { case (edgeKey, neighbour) =>
-              new WLNeighbour(edgeKey, neighbour)
+            neighbourhood.map { incidence =>
+              new WLNeighbour(incidence.edgeKey, incidence.orientation, incidence.colour)
             }
           val descriptor =
             WLDescriptor.refined(
               level,
               signature(parent).flatMap(_.stableDescriptor),
-              neighbourhood.map { case (edgeKey, neighbour) =>
-                edgeKey -> signature(neighbour).flatMap(
-                  _.stableDescriptor
+              neighbourhood.map { incidence =>
+                (
+                  incidence.edgeKey,
+                  incidence.orientation,
+                  signature(incidence.colour).flatMap(_.stableDescriptor)
                 )
               },
               base.codecs.edge
@@ -131,29 +131,29 @@ final class WLInternerOverlay[N, E] private[wl] (
   private def findLocalRefined(
       level: Int,
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Option[WLColour] =
     val hash = base.hashing.refined(level, parent, neighbourhood)
     candidates(hash).collectFirst {
       case refined: WLSignature.Refined[N, E]
           if refined.level == level &&
             refined.previous.equals(parent) &&
-            exactMultiset(refined.neighbourhood, neighbourhood) =>
+            WLInterner.exactMultiset(base.edgeHash, refined.neighbourhood, neighbourhood) =>
         refined.colour
     }
 
   private def validateReferences(
       parent: WLColour,
-      neighbourhood: Vector[(E, WLColour)]
+      neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, Unit] =
     if !owns(parent) then Left(WLInternerError.ForeignColour(parent))
     else
       neighbourhood
         .collectFirst {
-          case (_, colour) if !owns(colour) =>
-            WLInternerError.ForeignColour(colour)
-          case (_, colour) if colour.level != parent.level =>
-            WLInternerError.InvalidNeighbourLevel(parent, colour)
+          case incidence if !owns(incidence.colour) =>
+            WLInternerError.ForeignColour(incidence.colour)
+          case incidence if incidence.colour.level != parent.level =>
+            WLInternerError.InvalidNeighbourLevel(parent, incidence.colour)
         }
         .toLeft(())
 
@@ -181,27 +181,6 @@ final class WLInternerOverlay[N, E] private[wl] (
       localBuckets.updated(hash, bucket)
     )
 
-  private def exactMultiset(
-      stored: Vector[WLNeighbour[E]],
-      incoming: Vector[(E, WLColour)]
-  ): Boolean =
-    if stored.size != incoming.size then false
-    else
-      val matched = Array.fill(incoming.size)(false)
-      stored.forall { expected =>
-        val index =
-          incoming.indices.find { candidate =>
-            !matched(candidate) &&
-            base.edgeHash.eqv(
-              expected.edgeKey,
-              incoming(candidate)._1
-            ) &&
-            expected.colour.equals(incoming(candidate)._2)
-          }
-        index.foreach(candidate => matched(candidate) = true)
-        index.nonEmpty
-      }
-
   private def crossTraceMultiset(
       left: Vector[WLNeighbour[E]],
       that: WLInternerOverlay[N, E],
@@ -218,6 +197,7 @@ final class WLInternerOverlay[N, E] private[wl] (
               expected.edgeKey,
               right(candidate).edgeKey
             ) &&
+            expected.orientation == right(candidate).orientation &&
             semanticallyEquivalent(
               expected.colour,
               that,

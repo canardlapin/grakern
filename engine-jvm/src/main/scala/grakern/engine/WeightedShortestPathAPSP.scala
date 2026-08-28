@@ -1,15 +1,13 @@
 package grakern.engine
 
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.shortestpath.*
-import graph4s.Edge
 import java.util.{Arrays, Comparator, PriorityQueue}
 
 enum WeightedShortestPathAPSPError[V]:
   case PackedCorpus(error: PackedCorpusError[V])
   case EdgeProjection(
-      error: PrepareError[Nothing, Edge[V]]
+      error: PrepareError[Nothing, EdgeRef[V]]
   )
   case DistanceCapacityExceeded(
       sample: SampleKey,
@@ -19,7 +17,7 @@ enum WeightedShortestPathAPSPError[V]:
   case DistanceOverflow(
       sample: SampleKey,
       source: V,
-      edge: Edge[V],
+      edge: EdgeRef[V],
       prefix: Double,
       edgeLength: Double
   )
@@ -254,7 +252,7 @@ private object WeightedDistanceBlock:
 
 object WeightedShortestPathAPSP:
   private[grakern] def prepare[V, N, E](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       edgeLengths: WeightedEdgeLengths[E]
   ): Either[
     WeightedShortestPathAPSPError[V],
@@ -267,7 +265,7 @@ object WeightedShortestPathAPSP:
     )
 
   private[engine] def prepare[V, N, E](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       edgeLengths: WeightedEdgeLengths[E],
       planNodeId: PlanNodeId
   ): Either[

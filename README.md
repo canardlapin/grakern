@@ -15,8 +15,14 @@ Kernel + Decomposition + Refinement + Hierarchy + Compiler
 ## Current executable slice
 
 - lawful `Kernel`, `StrongKernel`, hierarchy, and padded optimal assignment;
-- `GraphSample` over the pinned `graph4s` topology, with vertex identity
-  separate from node values;
+- a topology-neutral `LabelledNeighbourhood` protocol in core (ADR-009):
+  vertices, total node values, and labelled incidences with orientation
+  relative to the vertex asked; `NeighbourhoodSample` builds validated
+  undirected, directed, and multi-edge inputs, and `GraphSample` is the
+  graph4s adapter (vertex identity separate from node values);
+- orientation-aware WL refinement: reversing a directed edge changes the
+  kernel, undirected inputs are bit-identical to the pre-protocol engine on
+  every committed parity fixture;
 - exact WL signatures with collision resolution, parent links, immutable query
   overlays, subtree features, and threshold-expanded OA features;
 - normalized direct-sum WL preparation with Gale CSR, Gram, operator, cross,
@@ -67,9 +73,9 @@ preparation example.
 
 | Module | Role | Platforms |
 |---|---|---|
-| `grakern-core` | kernel claims, decomposition, hierarchy, identity | JVM, Scala.js, Native |
-| `grakern-graph4s` | public graph boundary and total fields | JVM, Scala.js, Native |
-| `grakern-standard` | WL and histogram recipes | JVM, Scala.js, Native |
+| `grakern-core` | kernel claims, decomposition, hierarchy, identity, the labelled-neighbourhood protocol | JVM, Scala.js, Native |
+| `grakern-graph4s` | graph4s adapter of the protocol (undirected simple graphs, total fields) | JVM, Scala.js, Native |
+| `grakern-standard` | WL and histogram recipes over the protocol (no graph4s dependency) | JVM, Scala.js, Native |
 | `grakern-laws` | portable semantic law support | JVM, Scala.js, Native |
 | `grakern-engine-jvm` | packed execution, Gale features/matrices/operators | JVM |
 

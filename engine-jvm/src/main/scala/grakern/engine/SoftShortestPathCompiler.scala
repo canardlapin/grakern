@@ -2,7 +2,6 @@ package grakern.engine
 
 import gale.linalg.DMat
 import grakern.core.*
-import grakern.graph4s.GraphSample
 import grakern.standard.shortestpath.*
 
 enum SoftPartEvaluationStage derives CanEqual:
@@ -65,7 +64,7 @@ object SoftShortestPathCompiler:
   )
 
   def prepare[V, N, E, Key](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       kernel: SoftShortestPathKernel[N, E, Key],
       diagonalTolerance: NonNegativeFinite = NonNegativeFinite.zero
   ): Either[
@@ -80,7 +79,7 @@ object SoftShortestPathCompiler:
     )
 
   private[engine] def preparePlanned[V, N, E, Key](
-      samples: Vector[GraphSample[V, N, E]],
+      samples: Vector[LabelledNeighbourhood[V, N, E]],
       kernel: SoftShortestPathKernel[N, E, Key],
       diagonalTolerance: NonNegativeFinite,
       apspPlanNodeId: PlanNodeId

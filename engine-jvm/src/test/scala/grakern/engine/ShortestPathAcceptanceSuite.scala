@@ -215,7 +215,7 @@ final class ShortestPathAcceptanceSuite extends FunSuite:
         case SoftShortestPathCompileError.Dijkstra(
               WeightedShortestPathAPSPError.EdgeProjection(
                 PrepareError.InvalidNumeric(
-                  SourceRef.Edge(sampleKey, _: Edge[?]),
+                  SourceRef.Edge(sampleKey, _: EdgeRef[?]),
                   projection,
                   value,
                   NumericError.NonFinite(_)
