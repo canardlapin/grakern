@@ -1,0 +1,1 @@
+{"actor":"codex-grakern-open-motes-2","entity":"grakern-e7-performance-court","kind":"reserve_open","mode":"exclusive","op":"20260829T025352.224718Z-p72382-c0000-rc028-h9b7889","paths":["engine-jvm/src","benchmark-worker/src","benchmarks/court"],"reservation_id":"rv-01M15Q05Q0990BSGQ9T11FNC7M","ts":"2026-08-29T02:53:52.224718Z","ttl_s":3600,"v":1}
