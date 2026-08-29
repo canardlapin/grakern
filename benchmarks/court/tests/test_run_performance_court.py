@@ -144,6 +144,21 @@ def cold_invocation(
 
 
 class CourtContractSuite(unittest.TestCase):
+    def test_macos_power_mode_accepts_active_automatic_and_high_profiles(
+        self,
+    ) -> None:
+        cases = {
+            "lowpowermode 0": (True, "pmset active lowpowermode=0"),
+            "lowpowermode 1": (False, "pmset active lowpowermode=1"),
+            "powermode 0": (True, "pmset active powermode=0"),
+            "powermode 1": (False, "pmset active powermode=1"),
+            "powermode 2": (True, "pmset active powermode=2"),
+            "standby 1": (None, "pmset did not report an active power mode"),
+        }
+        for output, expected in cases.items():
+            with self.subTest(output=output):
+                self.assertEqual(court.interpret_macos_power_mode(output), expected)
+
     def test_receipt_samples_use_each_forks_calibrated_batch_size(self) -> None:
         receipt = {
             "receipt_id": "varying-batches",

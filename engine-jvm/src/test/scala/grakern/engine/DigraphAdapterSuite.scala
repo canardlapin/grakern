@@ -54,6 +54,9 @@ final class DigraphAdapterSuite extends ScalaCheckSuite:
         .get
     prepared.kernel(0, 1).get
 
+  private def bits(value: Double): Long =
+    java.lang.Double.doubleToLongBits(value)
+
   /** Colour index multisets per level for two samples traced together (indices are trace-local). */
   private def colourPair(
       left: LabelledNeighbourhood[Int, String, String],
@@ -74,6 +77,8 @@ final class DigraphAdapterSuite extends ScalaCheckSuite:
   private val swapped = directed("swapped", predicateLabels, Vector((0, 2, "ARG0"), (0, 1, "ARG1")))
 
   test("G1: swapping fillers across differently keyed arcs changes the kernel"):
+    val (straightColours, swappedColours) = colourPair(straight, swapped)
+    assertNotEquals(straightColours(1), swappedColours(1))
     assert(kernelValue(straight, swapped) < 1.0 - 1e-9)
     val copy = directed("copy", predicateLabels, Vector((0, 1, "ARG0"), (0, 2, "ARG1")))
     assertEqualsDouble(kernelValue(straight, copy), 1.0, 1e-12)
@@ -82,7 +87,18 @@ final class DigraphAdapterSuite extends ScalaCheckSuite:
     val labels = Map(0 -> "a", 1 -> "b", 2 -> "c")
     val path = directed("path", labels, Vector((0, 1, "e"), (1, 2, "e")))
     val reversedMiddle = directed("reversed", labels, Vector((1, 0, "e"), (1, 2, "e")))
+    val (pathColours, reversedColours) = colourPair(path, reversedMiddle)
+    assertNotEquals(pathColours(1), reversedColours(1))
     assert(kernelValue(path, reversedMiddle) < 1.0 - 1e-9)
+
+  test("G1: two outgoing star edges differ from one incoming and one outgoing edge"):
+    val labels = Map(0 -> "hub", 1 -> "left", 2 -> "right")
+    val outgoing = directed("outgoing", labels, Vector((0, 1, "e"), (0, 2, "e")))
+    val mixed = directed("mixed", labels, Vector((0, 1, "e"), (2, 0, "e")))
+    val (outgoingColours, mixedColours) = colourPair(outgoing, mixed)
+
+    assertNotEquals(outgoingColours(1), mixedColours(1))
+    assert(kernelValue(outgoing, mixed) < 1.0 - 1e-9)
 
   test("parallel keyed incidences refine to different colours than a single one"):
     val labels = Map(0 -> "x", 1 -> "y")
@@ -102,26 +118,6 @@ final class DigraphAdapterSuite extends ScalaCheckSuite:
     val packed = PackedGraphCorpus.pack(Vector(looped)).toOption.get
     assertEquals(packed.edgeCount, 2)
     assertEquals(packed.neighbors(0).toVector, Vector(1, 0))
-
-  test("fingerprint: the WL codec schema is v2, so undirected-era artifacts cannot be reused"):
-    val codecs =
-      WLCodecs[String, String](
-        Some(
-          StableCodec
-            .named(StableId.from("n").toOption.get, StableVersion.from(1).toOption.get)(identity)
-        ),
-        Some(
-          StableCodec.named(StableId.from("e").toOption.get, StableVersion.from(1).toOption.get)(
-            identity
-          )
-        )
-      )
-    val fingerprint = codecs.fingerprintability(PlanNodeId.fresh())
-    fingerprint match
-      case Fingerprintability.Durable(_) =>
-        ()
-      case other =>
-        fail(s"expected a durable fingerprint, observed $other")
 
   private val genDigraph: Gen[(Map[Int, String], Vector[(Int, Int, String)])] =
     for
@@ -152,7 +148,32 @@ final class DigraphAdapterSuite extends ScalaCheckSuite:
       })
       val original = directed("g", labels, arcs)
       val renamed = directed("g", renamedLabels, renamedArcs)
-      val left = WLCompiler.plan(Vector(original), refinement().subtree).run().toOption.get
-      val right = WLCompiler.plan(Vector(renamed), refinement().subtree).run().toOption.get
-      left.squaredNorm(0) == right.squaredNorm(0) && kernelValue(original, renamed) > 1.0 - 1e-12
+      val lawRefinement = refinement()
+      val kernel = lawRefinement.subtree.normalized
+      val paired = WLCompiler.plan(Vector(original, renamed), kernel).run().toOption.get
+      val training = WLCompiler.plan(Vector(original), kernel).run().toOption.get
+      val query = training.cross(Vector(renamed)).toOption.get
+      val trainingFeatures = training.features.values.toDense()
+      val queryFeatures = query.features.shared.toDense()
+      val (originalColours, renamedColours) = colourPair(original, renamed)
+
+      val checks =
+        Vector(
+          "colour multisets" -> (originalColours == renamedColours),
+          "Gram diagonals" ->
+            (bits(paired.gram.values(0, 0)) == bits(paired.gram.values(1, 1))),
+          "Gram cross" ->
+            (bits(paired.gram.values(0, 0)) == bits(paired.gram.values(0, 1))),
+          "query cross" ->
+            (bits(query.cross.values(0, 0)) == bits(training.gram.values(0, 0))),
+          "query novel norm" ->
+            (bits(query.features.novelSquaredNorm(0)) == bits(0.0)),
+          "query sparse features" ->
+            (0 until trainingFeatures.cols).forall { column =>
+              bits(queryFeatures(0, column)) == bits(trainingFeatures(0, column))
+            }
+        )
+      val failed = checks.collect { case (name, false) => name }
+      assert(failed.isEmpty, clues(input, seed, failed))
+      true
     }

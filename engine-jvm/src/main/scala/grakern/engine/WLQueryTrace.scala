@@ -58,6 +58,18 @@ final class WLQueryTrace[V, NodeKey, EdgeKey] private[engine] (
       colours <- levels.lift(level)
     yield range.iterator.map(colours).toVector
 
+  private[engine] def foreachGraphColour(graphIndex: Int, level: Int)(
+      f: WLColour => Unit
+  ): Boolean =
+    (graphRanges.lift(graphIndex), levels.lift(level)) match
+      case (Some(range), Some(colours)) =>
+        var vertexIndex = range.start
+        while vertexIndex < range.end do
+          f(colours(vertexIndex))
+          vertexIndex += 1
+        true
+      case _ => false
+
 private[grakern] object WLQueryTrace:
   def prepare[
       TrainingV,
@@ -107,7 +119,10 @@ private[grakern] object WLQueryTrace:
   ] =
     val nodeKeys =
       packed.categoricalNodeColumn(value => refinement.nodeKey(value))
-    val incident = WLTrace.incidentKeys(packed, refinement)
+    val edgeKeys =
+      packed.packedEdges.map(edge => refinement.edgeKey(edge.value))
+    val neighbourhood =
+      new WLTrace.PackedIncidenceView(packed, edgeKeys)
     val sources =
       Vector.tabulate(packed.vertexCount) { vertexIndex =>
         WLSource(
@@ -115,12 +130,16 @@ private[grakern] object WLQueryTrace:
           packed.originalVertex(vertexIndex)
         )
       }
-    var overlay = WLInternerOverlay(training.interner)
+    val expectedSignatures = math
+      .min(
+        Int.MaxValue.toLong,
+        packed.vertexCount.toLong * (refinement.rounds.toLong + 1L)
+      )
+      .toInt
+    val overlay = WLInternerOverlayBuilder(training.interner, expectedSignatures)
     val initial = Vector.newBuilder[WLColour]
     nodeKeys.foreach { key =>
-      val (next, colour) = overlay.internInitial(key)
-      overlay = next
-      initial += colour
+      initial += overlay.internInitial(key)
     }
     var allLevels = Vector(initial.result())
     var previous = allLevels.head
@@ -131,18 +150,13 @@ private[grakern] object WLQueryTrace:
       val current = Vector.newBuilder[WLColour]
       var vertexIndex = 0
       while vertexIndex < packed.vertexCount && failure.isEmpty do
-        val neighbourhood =
-          incident(vertexIndex).map { case (target, edgeKey, orientation) =>
-            WLIncidence(edgeKey, orientation, previous(target))
-          }
-        overlay.internRefined(
+        neighbourhood.select(vertexIndex, previous)
+        overlay.internRefinedView(
           previous(vertexIndex),
           neighbourhood
         ) match
-          case Right((next, colour)) =>
-            overlay = next
-            current += colour
-          case Left(error) =>
+          case Right(colour) => current += colour
+          case Left(error)   =>
             failure = Some(
               WLQueryTraceError.Interning(
                 round,
@@ -166,6 +180,6 @@ private[grakern] object WLQueryTrace:
         ),
         sources,
         allLevels,
-        overlay
+        overlay.freeze()
       )
     )

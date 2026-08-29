@@ -1,0 +1,8 @@
+{
+  "expectedFeatureColumns": 15000,
+  "expectedQuerySharedNnz": 3,
+  "expectedQueryCrossNnz": 1,
+  "expectedChecksum": 14560000.0,
+  "maximumAllocatedBytesPerQuery": 100000.0,
+  "maximumPeakSingleQueryAllocatedBytes": 1000000
+}

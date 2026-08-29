@@ -70,3 +70,63 @@ final class GraphSampleSuite extends FunSuite:
       GraphSample.fromFields(SampleKey("oxygen"), topology, nodes, edges)
 
     assertEquals(result.map(_.nodeValueOption(AtomId(1))), Right(Some(Atom("O"))))
+
+  test("edge-list construction rejects a self-loop with a typed error"):
+    val atom = AtomId(1)
+    val result =
+      GraphSample.fromEdgeList(
+        SampleKey("loop"),
+        Vector(atom),
+        Vector(GraphSampleEdge(atom, atom, Bond(1)))
+      )(_ => Atom("C"))
+
+    assertEquals(
+      result,
+      Left(GraphSampleEdgeListError.SelfLoopUnsupported(0, atom))
+    )
+
+  test("edge-list construction rejects parallel and reversed duplicate edges"):
+    val left = AtomId(1)
+    val right = AtomId(2)
+    val result =
+      GraphSample.fromEdgeList(
+        SampleKey("parallel"),
+        Vector(left, right),
+        Vector(
+          GraphSampleEdge(left, right, Bond(1)),
+          GraphSampleEdge(right, left, Bond(2))
+        )
+      )(_ => Atom("C"))
+
+    assertEquals(
+      result,
+      Left(
+        GraphSampleEdgeListError.ParallelEdgeUnsupported(
+          edgeIndex = 1,
+          previousEdgeIndex = 0,
+          left = right,
+          right = left
+        )
+      )
+    )
+
+  test("edge-list construction preserves every accepted edge value"):
+    val first = AtomId(1)
+    val second = AtomId(2)
+    val third = AtomId(3)
+    val result =
+      GraphSample
+        .fromEdgeList(
+          SampleKey("path"),
+          Vector(first, second, third),
+          Vector(
+            GraphSampleEdge(first, second, Bond(1)),
+            GraphSampleEdge(second, third, Bond(2))
+          )
+        )(_ => Atom("C"))
+        .toOption
+        .get
+
+    assertEquals(result.edgeValue(first, second), Some(Bond(1)))
+    assertEquals(result.edgeValue(second, third), Some(Bond(2)))
+    assertEquals(result.topology.edgeCount, 2L)

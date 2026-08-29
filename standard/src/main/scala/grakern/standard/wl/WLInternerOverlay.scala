@@ -1,5 +1,7 @@
 package grakern.standard.wl
 
+import scala.collection.mutable
+
 /** An immutable query-local extension of a training interner.
   *
   * Known signatures reuse training colours. Novel signatures use a distinct owner shared only by
@@ -9,7 +11,7 @@ final class WLInternerOverlay[N, E] private[wl] (
     private[wl] val base: WLInterner[N, E],
     private[wl] val localOwner: ColourOwner,
     private[wl] val localNodes: Vector[WLSignature[N, E]],
-    private[wl] val localBuckets: Map[Int, Vector[Int]]
+    private[wl] val localBuckets: WLInternerBuckets
 ):
   def baseSignatureCount: Int = base.size
   def novelSignatureCount: Int = localNodes.size
@@ -45,12 +47,22 @@ final class WLInternerOverlay[N, E] private[wl] (
       parent: WLColour,
       neighbourhood: Vector[WLIncidence[E]]
   ): Either[WLInternerError, (WLInternerOverlay[N, E], WLColour)] =
+    internRefinedView(parent, WLIncidenceView.fromVector(neighbourhood))
+
+  private[grakern] def internRefinedView(
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Either[WLInternerError, (WLInternerOverlay[N, E], WLColour)] =
     validateReferences(parent, neighbourhood).map { _ =>
       val level = parent.level + 1
+      var baseOwned = base.owns(parent)
+      var ownershipIndex = 0
+      while baseOwned && ownershipIndex < neighbourhood.size do
+        baseOwned = base.owns(neighbourhood.colour(ownershipIndex))
+        ownershipIndex += 1
       val known =
-        if base.owns(parent) &&
-          neighbourhood.forall(incidence => base.owns(incidence.colour))
-        then base.findRefined(level, parent, neighbourhood)
+        if baseOwned
+        then base.findRefinedView(level, parent, neighbourhood)
         else None
 
       known.orElse(
@@ -59,31 +71,47 @@ final class WLInternerOverlay[N, E] private[wl] (
         case Some(colour) => (this, colour)
         case None         =>
           val hash =
-            base.hashing.refined(level, parent, neighbourhood)
+            base.hashing.refinedView(level, parent, neighbourhood)
           val colour =
             WLColour.create(localOwner, localNodes.size, level)
-          val neighbours =
-            neighbourhood.map { incidence =>
-              new WLNeighbour(incidence.edgeKey, incidence.orientation, incidence.colour)
-            }
-          val descriptor =
-            WLDescriptor.refined(
-              level,
-              signature(parent).flatMap(_.stableDescriptor),
-              neighbourhood.map { incidence =>
-                (
-                  incidence.edgeKey,
-                  incidence.orientation,
-                  signature(incidence.colour).flatMap(_.stableDescriptor)
-                )
-              },
-              base.codecs.edge
+          val neighbours = Vector.newBuilder[WLNeighbour[E]]
+          var neighbourIndex = 0
+          while neighbourIndex < neighbourhood.size do
+            neighbours += new WLNeighbour(
+              neighbourhood.edgeKey(neighbourIndex),
+              neighbourhood.orientation(neighbourIndex),
+              neighbourhood.colour(neighbourIndex)
             )
+            neighbourIndex += 1
+          val parentDescriptor =
+            signature(parent).flatMap(_.stableDescriptor)
+          val descriptor =
+            if parentDescriptor.isEmpty || base.codecs.edge.isEmpty then None
+            else
+              val described = Vector.newBuilder[
+                (E, grakern.core.Orientation, Option[grakern.core.SemanticFingerprint])
+              ]
+              var descriptorIndex = 0
+              while descriptorIndex < neighbourhood.size do
+                described += (
+                  (
+                    neighbourhood.edgeKey(descriptorIndex),
+                    neighbourhood.orientation(descriptorIndex),
+                    signature(neighbourhood.colour(descriptorIndex)).flatMap(_.stableDescriptor)
+                  )
+                )
+                descriptorIndex += 1
+              WLDescriptor.refined(
+                level,
+                parentDescriptor,
+                described.result(),
+                base.codecs.edge
+              )
           val value =
             WLSignature.refined[N, E](
               colour,
               parent,
-              neighbours,
+              neighbours.result(),
               descriptor
             )
           (appended(hash, value), colour)
@@ -123,39 +151,59 @@ final class WLInternerOverlay[N, E] private[wl] (
 
   private def findLocalInitial(nodeKey: N): Option[WLColour] =
     val hash = base.hashing.initial(nodeKey)
-    candidates(hash).collectFirst {
-      case initial: WLSignature.Initial[N, E] if base.nodeHash.eqv(initial.nodeKey, nodeKey) =>
-        initial.colour
-    }
+    val bucket = localBuckets.bucket(hash)
+    if bucket < 0 then None
+    else
+      var position = localBuckets.start(bucket)
+      val end = localBuckets.end(bucket)
+      while position < end do
+        localNodes(localBuckets.nodeIndex(position)) match
+          case initial: WLSignature.Initial[N, E] if base.nodeHash.eqv(initial.nodeKey, nodeKey) =>
+            return Some(initial.colour)
+          case _ =>
+        position += 1
+      None
 
   private def findLocalRefined(
       level: Int,
       parent: WLColour,
-      neighbourhood: Vector[WLIncidence[E]]
+      neighbourhood: WLIncidenceView[E]
   ): Option[WLColour] =
-    val hash = base.hashing.refined(level, parent, neighbourhood)
-    candidates(hash).collectFirst {
-      case refined: WLSignature.Refined[N, E]
-          if refined.level == level &&
-            refined.previous.equals(parent) &&
-            WLInterner.exactMultiset(base.edgeHash, refined.neighbourhood, neighbourhood) =>
-        refined.colour
-    }
+    val hash = base.hashing.refinedView(level, parent, neighbourhood)
+    val bucket = localBuckets.bucket(hash)
+    if bucket < 0 then None
+    else
+      var position = localBuckets.start(bucket)
+      val end = localBuckets.end(bucket)
+      while position < end do
+        localNodes(localBuckets.nodeIndex(position)) match
+          case refined: WLSignature.Refined[N, E]
+              if refined.level == level &&
+                refined.previous.equals(parent) &&
+                WLInterner.exactMultisetView(
+                  base.edgeHash,
+                  refined.neighbourhood,
+                  neighbourhood
+                ) =>
+            return Some(refined.colour)
+          case _ =>
+        position += 1
+      None
 
   private def validateReferences(
       parent: WLColour,
-      neighbourhood: Vector[WLIncidence[E]]
+      neighbourhood: WLIncidenceView[E]
   ): Either[WLInternerError, Unit] =
     if !owns(parent) then Left(WLInternerError.ForeignColour(parent))
     else
-      neighbourhood
-        .collectFirst {
-          case incidence if !owns(incidence.colour) =>
-            WLInternerError.ForeignColour(incidence.colour)
-          case incidence if incidence.colour.level != parent.level =>
-            WLInternerError.InvalidNeighbourLevel(parent, incidence.colour)
-        }
-        .toLeft(())
+      var index = 0
+      while index < neighbourhood.size do
+        val colour = neighbourhood.colour(index)
+        if !owns(colour) then return Left(WLInternerError.ForeignColour(colour))
+        if colour.level != parent.level then
+          return Left(WLInternerError.InvalidNeighbourLevel(parent, colour))
+        index += 1
+      Right(())
 
   private def owns(colour: WLColour): Boolean =
     base.owns(colour) || ownsLocal(colour)
@@ -163,22 +211,15 @@ final class WLInternerOverlay[N, E] private[wl] (
   private def ownsLocal(colour: WLColour): Boolean =
     colour.owner.eq(localOwner)
 
-  private def candidates(hash: Int): Vector[WLSignature[N, E]] =
-    localBuckets
-      .getOrElse(hash, Vector.empty)
-      .flatMap(localNodes.lift)
-
   private def appended(
       hash: Int,
       signature: WLSignature[N, E]
   ): WLInternerOverlay[N, E] =
-    val bucket =
-      localBuckets.getOrElse(hash, Vector.empty) :+ localNodes.size
     new WLInternerOverlay(
       base,
       localOwner,
       localNodes :+ signature,
-      localBuckets.updated(hash, bucket)
+      localBuckets.appended(hash, localNodes.size)
     )
 
   private def crossTraceMultiset(
@@ -216,5 +257,179 @@ object WLInternerOverlay:
       base,
       new ColourOwner,
       Vector.empty,
-      Map.empty
+      WLInternerBuckets.empty
     )
+
+/** Engine-local mutable construction path for an immutable query overlay. Public overlay updates
+  * remain persistent; a packed query can build once and freeze once without allocating one map
+  * snapshot per novel signature.
+  */
+final private[grakern] class WLInternerOverlayBuilder[N, E] private (
+    base: WLInterner[N, E],
+    localOwner: ColourOwner,
+    expectedSignatures: Int
+):
+  private val localNodes =
+    val values = mutable.ArrayBuffer.empty[WLSignature[N, E]]
+    values.sizeHint(expectedSignatures)
+    values
+  private val localBuckets = new MutableWLInternerBuckets(expectedSignatures)
+
+  def internInitial(nodeKey: N): WLColour =
+    base.findInitial(nodeKey).orElse(findLocalInitial(nodeKey)) match
+      case Some(colour) => colour
+      case None         =>
+        val hash = base.hashing.initial(nodeKey)
+        val colour = WLColour.create(localOwner, localNodes.size, level = 0)
+        append(
+          hash,
+          WLSignature.initial[N, E](
+            colour,
+            nodeKey,
+            WLDescriptor.initial(nodeKey, base.codecs.node)
+          )
+        )
+        colour
+
+  def internRefinedView(
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Either[WLInternerError, WLColour] =
+    validateReferences(parent, neighbourhood).map { _ =>
+      val level = parent.level + 1
+      var baseOwned = base.owns(parent)
+      var ownershipIndex = 0
+      while baseOwned && ownershipIndex < neighbourhood.size do
+        baseOwned = base.owns(neighbourhood.colour(ownershipIndex))
+        ownershipIndex += 1
+      val known =
+        if baseOwned then base.findRefinedView(level, parent, neighbourhood)
+        else None
+      known.orElse(findLocalRefined(level, parent, neighbourhood)) match
+        case Some(colour) => colour
+        case None         =>
+          val hash = base.hashing.refinedView(level, parent, neighbourhood)
+          val colour = WLColour.create(localOwner, localNodes.size, level)
+          val neighbours = Vector.newBuilder[WLNeighbour[E]]
+          var neighbourIndex = 0
+          while neighbourIndex < neighbourhood.size do
+            neighbours += new WLNeighbour(
+              neighbourhood.edgeKey(neighbourIndex),
+              neighbourhood.orientation(neighbourIndex),
+              neighbourhood.colour(neighbourIndex)
+            )
+            neighbourIndex += 1
+          val parentDescriptor = signature(parent).flatMap(_.stableDescriptor)
+          val descriptor =
+            if parentDescriptor.isEmpty || base.codecs.edge.isEmpty then None
+            else
+              val described = Vector.newBuilder[
+                (E, grakern.core.Orientation, Option[grakern.core.SemanticFingerprint])
+              ]
+              var descriptorIndex = 0
+              while descriptorIndex < neighbourhood.size do
+                described += (
+                  (
+                    neighbourhood.edgeKey(descriptorIndex),
+                    neighbourhood.orientation(descriptorIndex),
+                    signature(neighbourhood.colour(descriptorIndex)).flatMap(_.stableDescriptor)
+                  )
+                )
+                descriptorIndex += 1
+              WLDescriptor.refined(
+                level,
+                parentDescriptor,
+                described.result(),
+                base.codecs.edge
+              )
+          append(
+            hash,
+            WLSignature.refined[N, E](
+              colour,
+              parent,
+              neighbours.result(),
+              descriptor
+            )
+          )
+          colour
+    }
+
+  def freeze(): WLInternerOverlay[N, E] =
+    new WLInternerOverlay(
+      base,
+      localOwner,
+      localNodes.toVector,
+      localBuckets.freeze()
+    )
+
+  private def signature(colour: WLColour): Option[WLSignature[N, E]] =
+    base.signature(colour).orElse {
+      if ownsLocal(colour) && colour.index >= 0 && colour.index < localNodes.size then
+        val value = localNodes(colour.index)
+        Option.when(value.level == colour.level)(value)
+      else None
+    }
+
+  private def findLocalInitial(nodeKey: N): Option[WLColour] =
+    val hash = base.hashing.initial(nodeKey)
+    var candidate = localBuckets.head(hash)
+    while candidate >= 0 do
+      localNodes(candidate) match
+        case initial: WLSignature.Initial[N, E] if base.nodeHash.eqv(initial.nodeKey, nodeKey) =>
+          return Some(initial.colour)
+        case _ =>
+      candidate = localBuckets.nextIndex(candidate)
+    None
+
+  private def findLocalRefined(
+      level: Int,
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Option[WLColour] =
+    val hash = base.hashing.refinedView(level, parent, neighbourhood)
+    var candidate = localBuckets.head(hash)
+    while candidate >= 0 do
+      localNodes(candidate) match
+        case refined: WLSignature.Refined[N, E]
+            if refined.level == level &&
+              refined.previous.equals(parent) &&
+              WLInterner.exactMultisetView(
+                base.edgeHash,
+                refined.neighbourhood,
+                neighbourhood
+              ) =>
+          return Some(refined.colour)
+        case _ =>
+      candidate = localBuckets.nextIndex(candidate)
+    None
+
+  private def validateReferences(
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Either[WLInternerError, Unit] =
+    if !owns(parent) then Left(WLInternerError.ForeignColour(parent))
+    else
+      var index = 0
+      while index < neighbourhood.size do
+        val colour = neighbourhood.colour(index)
+        if !owns(colour) then return Left(WLInternerError.ForeignColour(colour))
+        if colour.level != parent.level then
+          return Left(WLInternerError.InvalidNeighbourLevel(parent, colour))
+        index += 1
+      Right(())
+
+  private def append(hash: Int, signature: WLSignature[N, E]): Unit =
+    val index = localNodes.size
+    localNodes += signature
+    localBuckets.append(hash, index)
+
+  private def owns(colour: WLColour): Boolean = base.owns(colour) || ownsLocal(colour)
+
+  private def ownsLocal(colour: WLColour): Boolean = colour.owner.eq(localOwner)
+
+private[grakern] object WLInternerOverlayBuilder:
+  def apply[N, E](
+      base: WLInterner[N, E],
+      expectedSignatures: Int
+  ): WLInternerOverlayBuilder[N, E] =
+    new WLInternerOverlayBuilder(base, new ColourOwner, expectedSignatures)

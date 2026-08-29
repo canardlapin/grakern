@@ -515,19 +515,19 @@ private[benchmark] object WorkerEngine:
             else wl.subtree
           val options =
             WLPlanOptions(
-              gramExecution = gramExecution
+              gramExecution = gramExecution,
+              requestedOutput =
+                if configuration.kernel == "wl_subtree_cross" then WLRequestedOutput.Query
+                else WLRequestedOutput.AllViews
             )
-          WLCompiler
-            .plan(corpus.training, kernel, options)
-            .run()
-            .left
-            .map(_.toString)
-            .flatMap { prepared =>
-              if configuration.kernel == "wl_subtree_cross"
-              then
-                prepared
-                  .cross(corpus.query)
-                  .left
+          if configuration.kernel == "wl_subtree_cross" then
+            WLCompiler
+              .queryPlan(corpus.training, kernel, options)
+              .runForQueries()
+              .left
+              .map(_.toString)
+              .flatMap(
+                _.cross(corpus.query).left
                   .map(_.toString)
                   .map { result =>
                     fromMatrix(
@@ -538,17 +538,22 @@ private[benchmark] object WorkerEngine:
                       corpus.training.map(_.key.value)
                     )
                   }
-              else
-                Right(
-                  fromMatrix(
-                    prepared.gram.values.rows,
-                    prepared.gram.values.cols,
-                    prepared.gram.values.apply,
-                    corpus.training.map(_.key.value),
-                    corpus.training.map(_.key.value)
-                  )
+              )
+          else
+            WLCompiler
+              .plan(corpus.training, kernel, options)
+              .run()
+              .left
+              .map(_.toString)
+              .map { prepared =>
+                fromMatrix(
+                  prepared.gram.values.rows,
+                  prepared.gram.values.cols,
+                  prepared.gram.values.apply,
+                  corpus.training.map(_.key.value),
+                  corpus.training.map(_.key.value)
                 )
-            }
+              }
         }
     }
 

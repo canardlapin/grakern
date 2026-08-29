@@ -6,7 +6,21 @@ final private[grakern] case class ExactFeatureRow[K](
   def activeSize: Int = entries.size
 
   def squaredNorm: Double =
-    entries.iterator.map { case (_, value) => value * value }.sum
+    // Feature discovery order follows graph enumeration order. Sort the numeric contributions
+    // before reducing so alpha-renaming or incidence shuffling cannot change the normalization bit.
+    val squares = new Array[Double](entries.size)
+    var index = 0
+    while index < entries.size do
+      val value = entries(index)._2
+      squares(index) = value * value
+      index += 1
+    java.util.Arrays.sort(squares)
+    var total = 0.0
+    index = 0
+    while index < squares.length do
+      total += squares(index)
+      index += 1
+    total
 
   def dot(
       that: ExactFeatureRow[K]

@@ -72,6 +72,22 @@ uv run \
   -v
 ```
 
+## Continuous regression ratchet
+
+Three workflows keep performance evidence at the same semantic boundary as the court:
+
+- pull requests run the court/oracle tests, focused WL parity tests, and the committed
+  `query-overlay.json` allocation ceiling;
+- the nightly workflow runs every Grakern Tier-1 warm row against its independent expected output
+  and preserves complete allocation, memory, and timing artifacts;
+- the weekly championship targets a dedicated `grakern-performance` runner, enforces strict host
+  admission, and runs the complete cross-language card.
+
+Changing a file under `benchmarks/court/baselines/` requires a versioned Markdown receipt under
+`benchmarks/court/reports/` in the same pull request. The smoke workflow rejects a baseline-only
+movement. Scheduled workflows upload plans, raw samples, proof logs, and receipts; a summary table
+never replaces those artifacts.
+
 The independent workload oracle has a separate suite:
 
 ```bash
@@ -115,6 +131,13 @@ JULIA_DEPOT_PATH=/tmp/grakern-graphkernels-julia \
   julia --project=tools/graphkernels-jl \
   -e 'using Pkg; Pkg.instantiate()'
 ```
+
+Generated Grakern jobs declare `-Xmx80m -Xss256k -XX:+UseSerialGC`.
+This is part of the measured runtime contract: the bounded heap fits the exact
+Tier-1 working set, while the serial collector avoids both G1's allocation-heavy
+small-heap penalty and hidden parallel GC work. The bounded thread stack also keeps
+JVM worker-thread residency inside the declared memory contract. The
+full Java command is preserved in every job and receipt.
 
 Generate the complete 72-job championship card outside the source checkout:
 

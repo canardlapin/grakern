@@ -13,6 +13,30 @@ trait WLHashStrategy[-N, -E]:
       neighbourhood: Vector[WLIncidence[E]]
   ): Int
 
+  private[grakern] def refinedView(
+      level: Int,
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Int =
+    refined(level, parent, neighbourhood.toVector)
+
+private[grakern] trait WLIncidenceView[+E]:
+  def size: Int
+  def edgeKey(index: Int): E
+  def orientation(index: Int): Orientation
+  def colour(index: Int): WLColour
+
+  final def toVector: Vector[WLIncidence[E]] =
+    Vector.tabulate(size)(index => WLIncidence(edgeKey(index), orientation(index), colour(index)))
+
+private[wl] object WLIncidenceView:
+  def fromVector[E](values: Vector[WLIncidence[E]]): WLIncidenceView[E] =
+    new WLIncidenceView[E]:
+      def size: Int = values.size
+      def edgeKey(index: Int): E = values(index).edgeKey
+      def orientation(index: Int): Orientation = values(index).orientation
+      def colour(index: Int): WLColour = values(index).colour
+
 object WLHashStrategy:
   private def orientationSalt(orientation: Orientation): Int =
     orientation match
@@ -30,14 +54,37 @@ object WLHashStrategy:
           parent: WLColour,
           neighbourhood: Vector[WLIncidence[E]]
       ): Int =
-        val unordered =
-          neighbourhood.foldLeft(0) { (current, incidence) =>
-            current +
-              MurmurHash3.mix(
-                Hash[E].hash(incidence.edgeKey) ^ orientationSalt(incidence.orientation),
-                incidence.colour.index
-              )
-          }
+        var unordered = 0
+        var index = 0
+        while index < neighbourhood.size do
+          val incidence = neighbourhood(index)
+          unordered += MurmurHash3.mix(
+            Hash[E].hash(incidence.edgeKey) ^ orientationSalt(incidence.orientation),
+            incidence.colour.index
+          )
+          index += 1
+        MurmurHash3.finalizeHash(
+          MurmurHash3.mix(
+            MurmurHash3.mix(level, parent.index),
+            unordered
+          ),
+          neighbourhood.size
+        )
+
+      override private[grakern] def refinedView(
+          level: Int,
+          parent: WLColour,
+          neighbourhood: WLIncidenceView[E]
+      ): Int =
+        var unordered = 0
+        var index = 0
+        while index < neighbourhood.size do
+          unordered += MurmurHash3.mix(
+            Hash[E].hash(neighbourhood.edgeKey(index)) ^
+              orientationSalt(neighbourhood.orientation(index)),
+            neighbourhood.colour(index).index
+          )
+          index += 1
         MurmurHash3.finalizeHash(
           MurmurHash3.mix(
             MurmurHash3.mix(level, parent.index),
@@ -56,12 +103,107 @@ object WLHashStrategy:
           neighbourhood: Vector[WLIncidence[E]]
       ): Int = value
 
+      override private[grakern] def refinedView(
+          level: Int,
+          parent: WLColour,
+          neighbourhood: WLIncidenceView[E]
+      ): Int = value
+
 enum WLInternerError:
   case ForeignColour(colour: WLColour)
   case InvalidNeighbourLevel(
       parent: WLColour,
       neighbour: WLColour
   )
+
+/** Compact immutable hash buckets for a frozen interner.
+  *
+  * The hash keys are sorted. `offsets` and `nodeIndices` form a CSR-like index, avoiding an
+  * immutable `Map[Int, Vector[Int]]` (and its boxed keys) on the preparation hot path.
+  */
+final private[wl] class WLInternerBuckets private (
+    private val hashes: Array[Int],
+    private val offsets: Array[Int],
+    private val nodeIndices: Array[Int]
+):
+  def bucket(hash: Int): Int =
+    var low = 0
+    var high = hashes.length - 1
+    while low <= high do
+      val middle = low + ((high - low) >>> 1)
+      val candidate = hashes(middle)
+      if candidate < hash then low = middle + 1
+      else if candidate > hash then high = middle - 1
+      else return middle
+    -(low + 1)
+
+  def start(bucket: Int): Int = offsets(bucket)
+
+  def end(bucket: Int): Int = offsets(bucket + 1)
+
+  def nodeIndex(position: Int): Int = nodeIndices(position)
+
+  def appended(hash: Int, nodeIndex: Int): WLInternerBuckets =
+    val existing = bucket(hash)
+    val insertionBucket = if existing >= 0 then existing else -existing - 1
+    val insertionPosition = offsets(insertionBucket + (if existing >= 0 then 1 else 0))
+
+    val updatedHashes =
+      if existing >= 0 then hashes
+      else
+        val result = new Array[Int](hashes.length + 1)
+        Array.copy(hashes, 0, result, 0, insertionBucket)
+        result(insertionBucket) = hash
+        Array.copy(
+          hashes,
+          insertionBucket,
+          result,
+          insertionBucket + 1,
+          hashes.length - insertionBucket
+        )
+        result
+
+    val updatedIndices = new Array[Int](nodeIndices.length + 1)
+    Array.copy(nodeIndices, 0, updatedIndices, 0, insertionPosition)
+    updatedIndices(insertionPosition) = nodeIndex
+    Array.copy(
+      nodeIndices,
+      insertionPosition,
+      updatedIndices,
+      insertionPosition + 1,
+      nodeIndices.length - insertionPosition
+    )
+
+    val updatedOffsets =
+      if existing >= 0 then
+        val result = offsets.clone()
+        var index = existing + 1
+        while index < result.length do
+          result(index) += 1
+          index += 1
+        result
+      else
+        val result = new Array[Int](updatedHashes.length + 1)
+        var index = 0
+        while index < result.length do
+          result(index) =
+            if index <= insertionBucket then offsets(index)
+            else offsets(index - 1) + 1
+          index += 1
+        result
+
+    new WLInternerBuckets(updatedHashes, updatedOffsets, updatedIndices)
+
+private[wl] object WLInternerBuckets:
+  val empty: WLInternerBuckets =
+    new WLInternerBuckets(Array.emptyIntArray, Array(0), Array.emptyIntArray)
+
+  def fromArrays(
+      hashes: Array[Int],
+      offsets: Array[Int],
+      nodeIndices: Array[Int]
+  ): WLInternerBuckets =
+    new WLInternerBuckets(hashes, offsets, nodeIndices)
 
 /** An immutable, hash-consed store of exact recursive WL signatures.
   *
@@ -75,7 +217,7 @@ final class WLInterner[N, E] private[wl] (
     private[wl] val hashing: WLHashStrategy[N, E],
     private[wl] val codecs: WLCodecs[N, E],
     private[wl] val nodes: Vector[WLSignature[N, E]],
-    private[wl] val buckets: Map[Int, Vector[Int]]
+    private[wl] val buckets: WLInternerBuckets
 ):
   def size: Int = nodes.size
 
@@ -120,19 +262,23 @@ final class WLInterner[N, E] private[wl] (
             neighbourhood.map { incidence =>
               new WLNeighbour(incidence.edgeKey, incidence.orientation, incidence.colour)
             }
+          val parentDescriptor =
+            signature(parent).flatMap(_.stableDescriptor)
           val descriptor =
-            WLDescriptor.refined(
-              level,
-              signature(parent).flatMap(_.stableDescriptor),
-              neighbourhood.map { incidence =>
-                (
-                  incidence.edgeKey,
-                  incidence.orientation,
-                  signature(incidence.colour).flatMap(_.stableDescriptor)
-                )
-              },
-              codecs.edge
-            )
+            if parentDescriptor.isEmpty || codecs.edge.isEmpty then None
+            else
+              WLDescriptor.refined(
+                level,
+                parentDescriptor,
+                neighbourhood.map { incidence =>
+                  (
+                    incidence.edgeKey,
+                    incidence.orientation,
+                    signature(incidence.colour).flatMap(_.stableDescriptor)
+                  )
+                },
+                codecs.edge
+              )
           val value =
             WLSignature.refined[N, E](
               colour,
@@ -177,34 +323,50 @@ final class WLInterner[N, E] private[wl] (
 
   private[wl] def findInitial(nodeKey: N): Option[WLColour] =
     val hash = hashing.initial(nodeKey)
-    candidates(hash).collectFirst {
-      case initial: WLSignature.Initial[N, E] if nodeHash.eqv(initial.nodeKey, nodeKey) =>
-        initial.colour
-    }
+    val bucket = buckets.bucket(hash)
+    if bucket < 0 then None
+    else
+      var position = buckets.start(bucket)
+      val end = buckets.end(bucket)
+      while position < end do
+        nodes(buckets.nodeIndex(position)) match
+          case initial: WLSignature.Initial[N, E] if nodeHash.eqv(initial.nodeKey, nodeKey) =>
+            return Some(initial.colour)
+          case _ =>
+        position += 1
+      None
 
   private[wl] def findRefined(
       level: Int,
       parent: WLColour,
       neighbourhood: Vector[WLIncidence[E]]
   ): Option[WLColour] =
-    val hash = hashing.refined(level, parent, neighbourhood)
-    candidates(hash).collectFirst {
-      case refined: WLSignature.Refined[N, E]
-          if refined.level == level &&
-            refined.previous.equals(parent) &&
-            WLInterner.exactMultiset(edgeHash, refined.neighbourhood, neighbourhood) =>
-        refined.colour
-    }
+    findRefinedView(level, parent, WLIncidenceView.fromVector(neighbourhood))
+
+  private[wl] def findRefinedView(
+      level: Int,
+      parent: WLColour,
+      neighbourhood: WLIncidenceView[E]
+  ): Option[WLColour] =
+    val hash = hashing.refinedView(level, parent, neighbourhood)
+    val bucket = buckets.bucket(hash)
+    if bucket < 0 then None
+    else
+      var position = buckets.start(bucket)
+      val end = buckets.end(bucket)
+      while position < end do
+        nodes(buckets.nodeIndex(position)) match
+          case refined: WLSignature.Refined[N, E]
+              if refined.level == level &&
+                refined.previous.equals(parent) &&
+                WLInterner.exactMultisetView(edgeHash, refined.neighbourhood, neighbourhood) =>
+            return Some(refined.colour)
+          case _ =>
+        position += 1
+      None
 
   private[wl] def owns(colour: WLColour): Boolean =
     colour.owner.eq(owner)
-
-  private[wl] def candidates(
-      hash: Int
-  ): Vector[WLSignature[N, E]] =
-    buckets
-      .getOrElse(hash, Vector.empty)
-      .flatMap(nodes.lift)
 
   private def validateReferences(
       parent: WLColour,
@@ -225,8 +387,6 @@ final class WLInterner[N, E] private[wl] (
       hash: Int,
       signature: WLSignature[N, E]
   ): WLInterner[N, E] =
-    val updatedBucket =
-      buckets.getOrElse(hash, Vector.empty) :+ nodes.size
     new WLInterner(
       owner,
       nodeHash,
@@ -234,7 +394,7 @@ final class WLInterner[N, E] private[wl] (
       hashing,
       codecs,
       nodes :+ signature,
-      buckets.updated(hash, updatedBucket)
+      buckets.appended(hash, nodes.size)
     )
 
   private def exactCrossTraceMultiset(
@@ -281,7 +441,7 @@ object WLInterner:
       hashing,
       codecs,
       Vector.empty,
-      Map.empty
+      WLInternerBuckets.empty
     )
 
   /** Exact multiset equality of a stored neighbourhood against an incoming one: edge key under
@@ -292,20 +452,32 @@ object WLInterner:
       stored: Vector[WLNeighbour[E]],
       incoming: Vector[WLIncidence[E]]
   ): Boolean =
+    exactMultisetView(edgeHash, stored, WLIncidenceView.fromVector(incoming))
+
+  private[wl] def exactMultisetView[E](
+      edgeHash: Hash[E],
+      stored: Vector[WLNeighbour[E]],
+      incoming: WLIncidenceView[E]
+  ): Boolean =
     if stored.size != incoming.size then false
     else
       val matched = Array.fill(incoming.size)(false)
-      stored.forall { expected =>
-        val index =
-          incoming.indices.find { candidate =>
-            !matched(candidate) &&
+      var storedIndex = 0
+      while storedIndex < stored.size do
+        val expected = stored(storedIndex)
+        var candidate = 0
+        var found = -1
+        while candidate < incoming.size && found < 0 do
+          if !matched(candidate) &&
             edgeHash.eqv(
               expected.edgeKey,
-              incoming(candidate).edgeKey
+              incoming.edgeKey(candidate)
             ) &&
-            expected.orientation == incoming(candidate).orientation &&
-            expected.colour.equals(incoming(candidate).colour)
-          }
-        index.foreach(candidate => matched(candidate) = true)
-        index.nonEmpty
-      }
+            expected.orientation == incoming.orientation(candidate) &&
+            expected.colour.equals(incoming.colour(candidate))
+          then found = candidate
+          candidate += 1
+        if found < 0 then return false
+        matched(found) = true
+        storedIndex += 1
+      true

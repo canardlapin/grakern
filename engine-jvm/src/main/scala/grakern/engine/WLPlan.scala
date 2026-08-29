@@ -117,7 +117,11 @@ object WLPlanGraph:
 final case class WLPlanOptions(
     corpusContent: Option[CorpusContentFingerprint] = None,
     diagonalTolerance: NonNegativeFinite = NonNegativeFinite.zero,
-    gramExecution: GramExecution = GramExecution.Sequential
+    gramExecution: GramExecution = GramExecution.Sequential,
+    gramPreference: WLGramPreference = WLGramPreference.Auto,
+    memoryBudget: Option[WLMemoryBudget] = None,
+    requestedOutput: WLRequestedOutput = WLRequestedOutput.AllViews,
+    anticipatedQueryNovelty: WLQueryNovelty = WLQueryNovelty.zero
 )
 
 final class WLPlan[V, N, E, NodeKey, EdgeKey] private[engine] (
@@ -136,6 +140,15 @@ final class WLPlan[V, N, E, NodeKey, EdgeKey] private[engine] (
     WLCompiledKernel[V, N, E, NodeKey, EdgeKey]
   ] =
     WLCompiler.run(this)
+
+  /** Compile the exact training feature basis needed by `query` and `cross`, without materializing
+    * an unrequested training Gram matrix or linear operator.
+    */
+  def runForQueries(): Either[
+    WLCompileError[V],
+    WLPreparedQueryKernel[V, N, E, NodeKey, EdgeKey]
+  ] =
+    WLCompiler.runForQueries(this)
 
 object WLPlan:
   private[engine] def create[
@@ -161,10 +174,7 @@ object WLPlan:
           orderedSamples = samples.map(_.key),
           compilerSchema = WLPlanIds.compilerSchema,
           loweringSchema = WLPlanIds.loweringSchema,
-          numericalPolicy = WLPlanIds.numericalPolicy(
-            options.diagonalTolerance,
-            options.gramExecution
-          ),
+          numericalPolicy = WLPlanIds.numericalPolicy(options),
           approximation = None,
           engineVersion = WLPlanIds.engineVersion
         )
@@ -184,11 +194,10 @@ private object WLPlanIds:
   val loweringSchema: StableId =
     stableId("exact-wl-sparse-features.v1")
   def numericalPolicy(
-      diagonalTolerance: NonNegativeFinite,
-      gramExecution: GramExecution
+      options: WLPlanOptions
   ): StableId =
     stableId(
-      s"ordered-double-reduction.v2;diagonal-tolerance=${diagonalTolerance.toDouble};gram=${gramExecution.stableDescriptor}"
+      s"ordered-double-reduction.v3;diagonal-tolerance=${options.diagonalTolerance.toDouble};gram=${options.gramExecution.stableDescriptor};preference=${options.gramPreference};memory=${options.memoryBudget.map(_.bytes)};output=${options.requestedOutput};query-novelty=${options.anticipatedQueryNovelty.fraction}"
     )
   val engineVersion: StableId =
     stableId("grakern-engine-e5")

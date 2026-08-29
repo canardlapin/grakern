@@ -132,3 +132,36 @@ final class WLQueryAlignmentSuite extends FunSuite:
     )
     assertEquals(prepared.gram.values(0, 0), gramBefore)
     assertEquals(prepared.features.columns.size, columnsBefore)
+
+  test("single-query sparse results agree bit-for-bit with the batch API"):
+    val prepared = WLCompiler.plan(training, kernel).run().toOption.get
+    val single = prepared.query(query.head).toOption.get
+    val batch = prepared.cross(query).toOption.get
+    val batchRow = batch.features.sparseRow(0).get
+
+    assertEquals(single.features.shared, batchRow)
+    assertEquals(single.features.novelSquaredNorm, batch.features.novelSquaredNorm(0))
+    assertEquals(single.features.completeSquaredNorm, batch.features.completeSquaredNorm(0).get)
+    assertEquals(single.cross.referenceColumns, batch.cross.referenceColumns)
+    assertEquals(
+      single.cross.indices.map(index => index -> single.cross.valueAt(index)),
+      single.cross.indices.map(index => index -> batch.cross.values(0, index))
+    )
+    assertEquals(single.executionStats, batch.executionStats)
+
+  test("one thousand incremental queries leave the prepared state structurally unchanged"):
+    val prepared = WLCompiler.plan(training, kernel).run().toOption.get
+    val columnsBefore = prepared.features.columns.coordinates
+    val fingerprintBefore = prepared.semanticFingerprint
+    val gramBefore = prepared.gram.values(0, 0)
+    val sparseBefore = prepared.features.sparseRow(0)
+
+    var index = 0
+    while index < 1000 do
+      assert(prepared.query(query.head).isRight)
+      index += 1
+
+    assertEquals(prepared.features.columns.coordinates, columnsBefore)
+    assertEquals(prepared.semanticFingerprint, fingerprintBefore)
+    assertEquals(prepared.gram.values(0, 0), gramBefore)
+    assertEquals(prepared.features.sparseRow(0), sparseBefore)

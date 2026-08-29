@@ -93,3 +93,44 @@ final class WLInternerOverlaySuite extends FunSuite:
     assertEquals(second.novelSignatureCount, 2)
     assertEquals(second.signature(oxygen).map(_.level), Some(0))
     assertEquals(second.signature(nitrogen).map(_.level), Some(0))
+
+  test("the mutable construction path freezes to exact overlay semantics"):
+    val empty =
+      WLInterner.empty(
+        noCodecs,
+        WLHashStrategy.constant[String, Int](0)
+      )
+    val (base, carbon) = empty.internInitial("C")
+    val builder = WLInternerOverlayBuilder(base, expectedSignatures = 8)
+    val oxygen = builder.internInitial("O")
+    val nitrogen = builder.internInitial("N")
+    val first =
+      builder
+        .internRefinedView(
+          carbon,
+          WLIncidenceView.fromVector(Vector(WLIncidence.undirected(1, oxygen)))
+        )
+        .toOption
+        .get
+    val repeated =
+      builder
+        .internRefinedView(
+          carbon,
+          WLIncidenceView.fromVector(Vector(WLIncidence.undirected(1, oxygen)))
+        )
+        .toOption
+        .get
+    val distinct =
+      builder
+        .internRefinedView(
+          carbon,
+          WLIncidenceView.fromVector(Vector(WLIncidence.undirected(1, nitrogen)))
+        )
+        .toOption
+        .get
+    val overlay = builder.freeze()
+
+    assertEquals(first, repeated)
+    assertNotEquals(first, distinct)
+    assertEquals(overlay.novelSignatureCount, 4)
+    assertEquals(overlay.signature(first).flatMap(_.parent), Some(carbon))

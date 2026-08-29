@@ -143,6 +143,27 @@ class PerformancePlanSuite(unittest.TestCase):
             ),
         )
 
+    def test_grakern_worker_has_an_explicit_measured_heap_budget(self) -> None:
+        plan = self.plan(
+            coverage_mode="diagnostic_subset",
+            row_ids={"t1-wl-subtree-sparse"},
+            boundaries=["prepared_topology"],
+            modes=["warm"],
+            implementations={"grakern"},
+        )
+        command = plan["jobs"][0]["command"]
+
+        self.assertEqual(
+            command[:5],
+            [
+                "/runtime/java",
+                "-Xmx80m",
+                "-Xss256k",
+                "-XX:+UseSerialGC",
+                "-jar",
+            ],
+        )
+
     def test_expensive_policy_applies_to_warm_race_group_only(self) -> None:
         plan = self.plan(
             expensive_rows={"t1-shortest-path-mutag"},

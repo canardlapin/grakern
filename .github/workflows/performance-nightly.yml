@@ -1,0 +1,64 @@
+name: Nightly reference and allocation court
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grakern-nightly-performance
+  cancel-in-progress: false
+
+jobs:
+  exact-reference-court:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v7
+      - name: Build the measured worker
+        run: sbt benchmarkWorker/assembly
+      - name: Generate the Grakern-only exact reference card
+        run: |
+          uv run --with jsonschema \
+            python benchmarks/court/generate_plan.py \
+            --coverage-mode diagnostic_subset \
+            --court-id "grakern-nightly-${GITHUB_RUN_ID}" \
+            --mode warm \
+            --implementation grakern \
+            --output /tmp/grakern-nightly-plan.json
+      - name: Run exact-output, allocation, and peak-memory diagnostics
+        run: |
+          uv run --with psutil --with jsonschema \
+            python benchmarks/court/run_performance_court.py run --diagnostic \
+            /tmp/grakern-nightly-plan.json \
+            /tmp/grakern-nightly-court
+      - name: Run the query-overlay allocation ratchet
+        run: >-
+          sbt
+          'benchmarkWorker/runMain grakern.benchmark.QueryOverlayBench
+          --baseline benchmarks/court/baselines/query-overlay.json
+          --output /tmp/grakern-nightly-query-overlay.json'
+      - name: Preserve raw samples and trend inputs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: nightly-performance-${{ github.run_id }}
+          path: |
+            /tmp/grakern-nightly-plan.json
+            /tmp/grakern-nightly-court
+            /tmp/grakern-nightly-query-overlay.json
+          if-no-files-found: warn
+          retention-days: 90

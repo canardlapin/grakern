@@ -1,6 +1,6 @@
 # ADR-009: The labelled-neighbourhood protocol
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-28
 Supersedes: the "first public graph input" decision of ADR-001; keeps its identity rules.
 
@@ -59,6 +59,26 @@ undirected-era artifacts are never silently reused.
 physical edge in witnesses and errors; ordinals distinguish parallel edges.
 `Neighbourhoods.canonicalEdges` enumerates each physical edge once.
 
+**Loops, multiplicity, and graph4s.** `NeighbourhoodSample` is the native
+multigraph adapter. Parallel incidences are an exact multiset: equal keys still
+count separately, and enumeration order is irrelevant to refinement. An
+undirected self-loop contributes one incidence at its vertex; a directed
+self-loop contributes one `Outgoing` and one `Incoming` incidence. The graph4s
+adapter remains deliberately simple and loopless. Its `fromEdgeList` constructor
+rejects self-loops, parallel or reversed-duplicate edges, unknown endpoints, and
+duplicate vertices with `GraphSampleEdgeListError`; it never constructs a
+partial sample or lets graph4s set semantics silently coalesce relations.
+
+**Relations as vertices.** `Reify.relationsAsVertices` is the topology-neutral
+escape hatch when edge attributes must participate in node refinement. Every
+physical `EdgeRef` becomes a distinct relation vertex whose value is the edge
+value. Undirected relations connect to distinct endpoints with `Undirected` (a
+self-loop once); directed relations use separate `Source` and `Target` endpoint
+labels, including two labelled connections for a directed self-loop. The
+construction is deterministic, alpha-invariant, and injective on labelled-edge
+multisets; it returns `ReificationError` if its generated neighbourhood ever
+violates the protocol.
+
 **Module boundary.** `grakern-core` and `grakern-standard` import no graph4s
 symbol (a source-level test enforces it); `grakern-graph4s` is the only module
 that does. `GraphSample` keeps its `build`/`fromFields` constructors and now
@@ -85,4 +105,5 @@ because graph4s fields are total by construction.
   every consumer would pay for capabilities only shortest-path lowerings need;
   derived helpers cover them without widening the contract.
 - Changing graph4s's simple-graph semantics: graph4s's identity is the simple
-  undirected graph; multigraphs belong to a different adapter.
+  undirected graph; multigraphs use `NeighbourhoodSample` or explicit
+  relation-as-vertex reification.

@@ -6,12 +6,35 @@ import grakern.core.SampleKey
 import scala.collection.mutable
 
 final case class SampleIndex(keys: Vector[SampleKey]):
+  private lazy val positions: Map[SampleKey, Int] =
+    keys.zipWithIndex.foldLeft(Map.empty[SampleKey, Int]) { case (current, (key, index)) =>
+      if current.contains(key) then current else current.updated(key, index)
+    }
+
   def size: Int = keys.size
 
   def indexOf(key: SampleKey): Option[Int] =
-    keys.indexOf(key) match
-      case -1    => None
-      case index => Some(index)
+    positions.get(key)
+
+/** One immutable sparse row in canonical increasing-column order. */
+final case class SparseFeatureRow(
+    indices: Vector[Int],
+    values: Vector[Double]
+):
+  require(indices.size == values.size, "sparse indices and values must have equal length")
+
+  def activeSize: Int = indices.size
+
+  def valueAt(column: Int): Double =
+    var low = 0
+    var high = indices.size - 1
+    while low <= high do
+      val middle = (low + high) >>> 1
+      val candidate = indices(middle)
+      if candidate < column then low = middle + 1
+      else if candidate > column then high = middle - 1
+      else return values(middle)
+    0.0
 
 final class FeatureDictionary[Coordinate] private[engine] (
     val coordinates: Vector[Coordinate],
@@ -88,7 +111,85 @@ final case class FeatureMatrix[Coordinate, +Metadata](
     rows: SampleIndex,
     columns: FeatureDictionary[Coordinate],
     metadata: FeatureMetadata[Metadata]
-)
+):
+  private lazy val sparseIndex = SparseCSRIndex(values)
+
+  /** Return one row without allocating a dense vector of `columns.size`. */
+  def sparseRow(row: Int): Option[SparseFeatureRow] =
+    sparseIndex.row(row)
+
+  private[engine] def postingStart(column: Int): Int = sparseIndex.postingStart(column)
+  private[engine] def postingEnd(column: Int): Int = sparseIndex.postingEnd(column)
+  private[engine] def postingRow(index: Int): Int = sparseIndex.postingRow(index)
+  private[engine] def postingValue(index: Int): Double = sparseIndex.postingValue(index)
+
+/** Row-only sparse view used by query results, whose feature-column dimension can be much larger
+  * than their stored row. Unlike [[SparseCSRIndex]], this does not build training postings.
+  */
+final private[engine] class SparseCSRRows private (
+    private val rowEntries: Vector[SparseFeatureRow]
+):
+  def row(index: Int): Option[SparseFeatureRow] = rowEntries.lift(index)
+
+private[engine] object SparseCSRRows:
+  def apply(values: CSR): SparseCSRRows =
+    val rowIndices = Array.fill(values.rows)(mutable.ArrayBuffer.empty[Int])
+    val rowValues = Array.fill(values.rows)(mutable.ArrayBuffer.empty[Double])
+    values.foreachStoredEntry { (row, column, value) =>
+      if value != 0.0 then
+        rowIndices(row) += column
+        rowValues(row) += value
+    }
+    new SparseCSRRows(
+      Vector.tabulate(values.rows)(row =>
+        SparseFeatureRow(rowIndices(row).toVector, rowValues(row).toVector)
+      )
+    )
+
+final private[engine] class SparseCSRIndex private (
+    private val source: CSR,
+    private val postingOffsets: Array[Int],
+    private val postingRows: Array[Int],
+    private val postingValues: Array[Double]
+):
+  private lazy val rowEntries = SparseCSRRows(source)
+
+  def row(index: Int): Option[SparseFeatureRow] = rowEntries.row(index)
+  def postingStart(column: Int): Int = postingOffsets(column)
+  def postingEnd(column: Int): Int = postingOffsets(column + 1)
+  def postingRow(index: Int): Int = postingRows(index)
+  def postingValue(index: Int): Double = postingValues(index)
+
+private[engine] object SparseCSRIndex:
+  def apply(values: CSR): SparseCSRIndex =
+    val columnCounts = new Array[Int](values.cols)
+    var nonZeros = 0
+    values.foreachStoredEntry { (_, column, value) =>
+      if value != 0.0 then
+        columnCounts(column) += 1
+        nonZeros += 1
+    }
+    val postingOffsets = new Array[Int](values.cols + 1)
+    var column = 0
+    while column < columnCounts.length do
+      postingOffsets(column + 1) = postingOffsets(column) + columnCounts(column)
+      column += 1
+    val postingCursors = postingOffsets.clone()
+    val postingRows = new Array[Int](nonZeros)
+    val postingValues = new Array[Double](nonZeros)
+    values.foreachStoredEntry { (row, column, value) =>
+      if value != 0.0 then
+        val destination = postingCursors(column)
+        postingRows(destination) = row
+        postingValues(destination) = value
+        postingCursors(column) += 1
+    }
+    new SparseCSRIndex(
+      values,
+      postingOffsets,
+      postingRows,
+      postingValues
+    )
 
 private[grakern] object ExactFeatureMatrix:
   def materialize[Coordinate, Metadata](

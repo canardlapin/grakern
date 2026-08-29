@@ -1,8 +1,6 @@
 package grakern.engine
 
 import grakern.core.*
-import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 final private[grakern] case class PackedEdge[V, +E](
     source: Int,
@@ -137,6 +135,197 @@ final private[grakern] class PackedGraphCorpus[V, +N, +E] private (
     failure.toLeft(new NonNegativeEdgeColumn(output))
 
 private[grakern] object PackedGraphCorpus:
+  final private class IntArrayBuilder(initialCapacity: Int = 16):
+    private var values = new Array[Int](math.max(1, initialCapacity))
+    private var length = 0
+
+    def size: Int = length
+
+    def +=(value: Int): Unit =
+      ensureCapacity(length + 1)
+      values(length) = value
+      length += 1
+
+    def result(): Array[Int] = java.util.Arrays.copyOf(values, length)
+
+    private def ensureCapacity(required: Int): Unit =
+      if required > values.length then
+        var capacity = values.length << 1
+        while capacity < required do capacity = capacity << 1
+        values = java.util.Arrays.copyOf(values, capacity)
+
+  final private class ByteArrayBuilder(initialCapacity: Int = 16):
+    private var values = new Array[Byte](math.max(1, initialCapacity))
+    private var length = 0
+
+    def +=(value: Byte): Unit =
+      ensureCapacity(length + 1)
+      values(length) = value
+      length += 1
+
+    def result(): Array[Byte] = java.util.Arrays.copyOf(values, length)
+
+    private def ensureCapacity(required: Int): Unit =
+      if required > values.length then
+        var capacity = values.length << 1
+        while capacity < required do capacity = capacity << 1
+        values = java.util.Arrays.copyOf(values, capacity)
+
+  /** Graph-local open-addressed vertex index using the protocol's Cats `Hash`, without allocating
+    * one `HashKey` and boxed index per lookup.
+    */
+  final private class LocalVertexIndex[V](expectedSize: Int)(using hash: cats.kernel.Hash[V]):
+    private val capacity =
+      val desired = math.min(1L << 30, math.max(2L, expectedSize.toLong * 2L))
+      var result = 2
+      while result.toLong < desired do result = result << 1
+      result
+    private val mask = capacity - 1
+    private val occupied = new Array[Boolean](capacity)
+    private val keys = new Array[Any](capacity)
+    private val indices = new Array[Int](capacity)
+
+    def put(value: V, index: Int): Unit =
+      val slot = findSlot(value)
+      occupied(slot) = true
+      keys(slot) = value
+      indices(slot) = index
+
+    def getOrNegative(value: V): Int =
+      val slot = findSlot(value)
+      if occupied(slot) then indices(slot) else -1
+
+    private def findSlot(value: V): Int =
+      var slot = spread(hash.hash(value)) & mask
+      while occupied(slot) && !hash.eqv(keys(slot).asInstanceOf[V], value) do
+        slot = (slot + 1) & mask
+      slot
+
+    private def spread(value: Int): Int = value ^ (value >>> 16)
+
+  /** Primitive edge-slot table. Each physical edge is a node in one slot-local linked list; the two
+    * incidence sides advance independent primitive cursors through that list.
+    */
+  final private class EdgeSlotTable(expectedEdges: Int):
+    private val initialSlotCapacity =
+      val desired = math.min(1L << 30, math.max(16L, expectedEdges.toLong * 2L))
+      var result = 16
+      while result.toLong < desired do result = result << 1
+      result
+    private var keys = new Array[Long](initialSlotCapacity)
+    private var occupied = new Array[Boolean](initialSlotCapacity)
+    private var heads = Array.fill(initialSlotCapacity)(-1)
+    private var tails = Array.fill(initialSlotCapacity)(-1)
+    private var trueCursors = Array.fill(initialSlotCapacity)(-1)
+    private var falseCursors = Array.fill(initialSlotCapacity)(-1)
+    private var sizes = new Array[Int](initialSlotCapacity)
+    private var trueConsumed = new Array[Int](initialSlotCapacity)
+    private var falseConsumed = new Array[Int](initialSlotCapacity)
+    private var slotCount = 0
+    private var edgeIds = new Array[Int](math.max(1, expectedEdges))
+    private var nextEdges = Array.fill(math.max(1, expectedEdges))(-1)
+    private var edgeCount = 0
+
+    def append(key: Long, edgeId: Int): Int =
+      var slot = findSlot(key)
+      if !occupied(slot) && (slotCount + 1) * 10 >= keys.length * 7 then
+        growSlots()
+        slot = findSlot(key)
+      ensureEdgeCapacity(edgeCount + 1)
+      val ordinal = sizes(slot)
+      edgeIds(edgeCount) = edgeId
+      nextEdges(edgeCount) = -1
+      if occupied(slot) then nextEdges(tails(slot)) = edgeCount
+      else
+        occupied(slot) = true
+        keys(slot) = key
+        heads(slot) = edgeCount
+        slotCount += 1
+      tails(slot) = edgeCount
+      sizes(slot) += 1
+      edgeCount += 1
+      ordinal
+
+    def resetCursors(): Unit =
+      var slot = 0
+      while slot < keys.length do
+        if occupied(slot) then
+          trueCursors(slot) = heads(slot)
+          falseCursors(slot) = heads(slot)
+        slot += 1
+
+    def consume(key: Long, firstSide: Boolean): Int =
+      val slot = findSlot(key)
+      if !occupied(slot) then -1
+      else
+        val node = if firstSide then trueCursors(slot) else falseCursors(slot)
+        if node < 0 then -1
+        else
+          if firstSide then
+            trueCursors(slot) = nextEdges(node)
+            trueConsumed(slot) += 1
+          else
+            falseCursors(slot) = nextEdges(node)
+            falseConsumed(slot) += 1
+          edgeIds(node)
+
+    def firstUnmatched(): Option[Long] =
+      var slot = 0
+      while slot < keys.length do
+        if occupied(slot) then
+          val key = keys(slot)
+          val needsSecondSide = slotDirected(key) || slotLower(key) != slotUpper(key)
+          if trueConsumed(slot) != sizes(slot) ||
+            needsSecondSide && falseConsumed(slot) != sizes(slot)
+          then return Some(key)
+        slot += 1
+      None
+
+    private def findSlot(key: Long): Int =
+      val mask = keys.length - 1
+      var slot = spread(key) & mask
+      while occupied(slot) && keys(slot) != key do slot = (slot + 1) & mask
+      slot
+
+    private def growSlots(): Unit =
+      val previousKeys = keys
+      val previousOccupied = occupied
+      val previousHeads = heads
+      val previousTails = tails
+      val previousSizes = sizes
+      keys = new Array[Long](previousKeys.length << 1)
+      occupied = new Array[Boolean](keys.length)
+      heads = Array.fill(keys.length)(-1)
+      tails = Array.fill(keys.length)(-1)
+      trueCursors = Array.fill(keys.length)(-1)
+      falseCursors = Array.fill(keys.length)(-1)
+      sizes = new Array[Int](keys.length)
+      trueConsumed = new Array[Int](keys.length)
+      falseConsumed = new Array[Int](keys.length)
+      var previousSlot = 0
+      while previousSlot < previousKeys.length do
+        if previousOccupied(previousSlot) then
+          val slot = findSlot(previousKeys(previousSlot))
+          occupied(slot) = true
+          keys(slot) = previousKeys(previousSlot)
+          heads(slot) = previousHeads(previousSlot)
+          tails(slot) = previousTails(previousSlot)
+          sizes(slot) = previousSizes(previousSlot)
+        previousSlot += 1
+
+    private def ensureEdgeCapacity(required: Int): Unit =
+      if required > edgeIds.length then
+        var capacity = edgeIds.length << 1
+        while capacity < required do capacity = capacity << 1
+        edgeIds = java.util.Arrays.copyOf(edgeIds, capacity)
+        val expanded = Array.fill(capacity)(-1)
+        Array.copy(nextEdges, 0, expanded, 0, nextEdges.length)
+        nextEdges = expanded
+
+    private def spread(value: Long): Int =
+      val folded = (value ^ (value >>> 32)).toInt
+      folded ^ (folded >>> 16)
+
   private[engine] def orientationByte(orientation: Orientation): Byte =
     orientation match
       case Orientation.Undirected => 0
@@ -149,19 +338,25 @@ private[grakern] object PackedGraphCorpus:
       case 2 => Orientation.Incoming
       case _ => Orientation.Undirected
 
-  /** Slot identity used to pair the two appearances of one physical edge. */
-  final private case class Slot(lower: Int, upper: Int, directed: Boolean)
+  private def slotKey(lower: Int, upper: Int, directed: Boolean): Long =
+    (lower.toLong << 33) | (upper.toLong << 1) | (if directed then 1L else 0L)
+
+  private def slotLower(key: Long): Int = (key >>> 33).toInt
+  private def slotUpper(key: Long): Int = ((key >>> 1) & 0xffffffffL).toInt
+  private def slotDirected(key: Long): Boolean = (key & 1L) != 0L
 
   def pack[V, N, E](
       samples: Vector[LabelledNeighbourhood[V, N, E]]
   ): Either[PackedCorpusError[V], PackedGraphCorpus[V, N, E]] =
     val sampleKeys = samples.map(_.key)
-    val graphOffsets = ArrayBuffer(0)
-    val adjacencyOffsets = ArrayBuffer(0)
-    val adjacencyTargets = ArrayBuffer.empty[Int]
-    val adjacencyEdges = ArrayBuffer.empty[Int]
-    val adjacencyOrientations = ArrayBuffer.empty[Byte]
-    val vertexOwners = ArrayBuffer.empty[Int]
+    val graphOffsets = new IntArrayBuilder(samples.size + 1)
+    graphOffsets += 0
+    val adjacencyOffsets = new IntArrayBuilder()
+    adjacencyOffsets += 0
+    val adjacencyTargets = new IntArrayBuilder()
+    val adjacencyEdges = new IntArrayBuilder()
+    val adjacencyOrientations = new ByteArrayBuilder()
+    val vertexOwners = new IntArrayBuilder()
     val originalVertices = Vector.newBuilder[V]
     val nodeValues = Vector.newBuilder[N]
     val packedEdges = Vector.newBuilder[PackedEdge[V, E]]
@@ -184,116 +379,118 @@ private[grakern] object PackedGraphCorpus:
           )
         )
       else
-        val localToGlobal =
-          vertices.iterator.zipWithIndex.map { case (vertex, local) =>
-            HashKey(vertex) -> (totalVertices + local)
-          }.toMap
+        val localToGlobal = new LocalVertexIndex[V](vertices.size)
+        var vertexIndex = 0
+        while vertexIndex < vertices.size do
+          localToGlobal.put(vertices(vertexIndex), vertexIndex)
+          vertexIndex += 1
 
         // Pass 1: create one packed edge per physical edge, in vertex/incidence order, and remember
         // the packed indices per slot so pass 2 can hand both endpoints the same edge.
-        val created = mutable.HashMap.empty[Slot, ArrayBuffer[Int]]
-        val ordinals = mutable.HashMap.empty[Slot, Int]
+        val slots = new EdgeSlotTable(vertices.size * 2)
         var localIndex = 0
         while localIndex < vertices.size && failure.isEmpty do
           val vertex = vertices(localIndex)
           val source = totalVertices + localIndex
-          sample.incidences(vertex).foreach { incidence =>
-            localToGlobal.get(HashKey(incidence.other)) match
-              case None =>
-                if failure.isEmpty then
-                  failure = Some(
-                    PackedCorpusError.UnknownNeighbor(sample.key, vertex, incidence.other)
-                  )
-              case Some(target) =>
-                val creates =
+          val incidences = sample.incidences(vertex)
+          var incidenceIndex = 0
+          while incidenceIndex < incidences.size && failure.isEmpty do
+            val incidence = incidences(incidenceIndex)
+            val targetLocal = localToGlobal.getOrNegative(incidence.other)
+            if targetLocal < 0 then
+              failure = Some(
+                PackedCorpusError.UnknownNeighbor(sample.key, vertex, incidence.other)
+              )
+            else
+              val target = totalVertices + targetLocal
+              val creates =
+                incidence.orientation match
+                  case Orientation.Undirected => source <= target
+                  case Orientation.Outgoing   => true
+                  case Orientation.Incoming   => false
+              if creates then
+                val slot =
                   incidence.orientation match
-                    case Orientation.Undirected => source <= target
-                    case Orientation.Outgoing   => true
-                    case Orientation.Incoming   => false
-                if creates then
-                  val slot =
-                    incidence.orientation match
-                      case Orientation.Undirected =>
-                        Slot(math.min(source, target), math.max(source, target), false)
-                      case _ => Slot(source, target, true)
-                  val ordinal = ordinals.getOrElse(slot, 0)
-                  ordinals.update(slot, ordinal + 1)
-                  packedEdges += PackedEdge(
-                    source,
-                    target,
-                    graphIndex,
-                    EdgeRef(vertex, incidence.other, incidence.orientation, ordinal),
-                    incidence.value,
-                    incidence.orientation
-                  )
-                  created.getOrElseUpdate(slot, ArrayBuffer.empty) += totalEdges
-                  totalEdges += 1
-          }
+                    case Orientation.Undirected =>
+                      slotKey(
+                        math.min(localIndex, targetLocal),
+                        math.max(localIndex, targetLocal),
+                        false
+                      )
+                    case _ => slotKey(localIndex, targetLocal, true)
+                val ordinal = slots.append(slot, totalEdges)
+                packedEdges += PackedEdge(
+                  source,
+                  target,
+                  graphIndex,
+                  EdgeRef(vertex, incidence.other, incidence.orientation, ordinal),
+                  incidence.value,
+                  incidence.orientation
+                )
+                totalEdges += 1
+            incidenceIndex += 1
           localIndex += 1
 
         // Pass 2: adjacency in incidence order; each endpoint side consumes the slot's edges in
         // creation order, so the k-th incidence on one side pairs with the k-th on the other.
-        val cursors = mutable.HashMap.empty[(Slot, Boolean), Int]
+        slots.resetCursors()
         localIndex = 0
         while localIndex < vertices.size && failure.isEmpty do
           val vertex = vertices(localIndex)
-          val source = totalVertices + localIndex
           originalVertices += vertex
           vertexOwners += graphIndex
           nodeValues += sample.nodeValue(vertex)
-          sample.incidences(vertex).foreach { incidence =>
-            if failure.isEmpty then
-              val target = localToGlobal(HashKey(incidence.other))
-              val (slot, side) =
-                incidence.orientation match
-                  case Orientation.Undirected =>
-                    (
-                      Slot(math.min(source, target), math.max(source, target), false),
-                      source <= target
-                    )
-                  case Orientation.Outgoing => (Slot(source, target, true), true)
-                  case Orientation.Incoming => (Slot(target, source, true), false)
-              val cursorKey = (slot, side)
-              val cursor = cursors.getOrElse(cursorKey, 0)
-              created.get(slot).flatMap(_.lift(cursor)) match
-                case Some(edgeIndex) =>
-                  cursors.update(cursorKey, cursor + 1)
-                  adjacencyTargets += target
-                  adjacencyEdges += edgeIndex
-                  adjacencyOrientations += orientationByte(incidence.orientation)
-                case None =>
-                  failure = Some(
-                    PackedCorpusError.UnmatchedIncidence(
-                      sample.key,
-                      vertex,
-                      incidence.other,
-                      incidence.orientation
-                    )
+          val incidences = sample.incidences(vertex)
+          var incidenceIndex = 0
+          while incidenceIndex < incidences.size && failure.isEmpty do
+            val incidence = incidences(incidenceIndex)
+            val targetLocal = localToGlobal.getOrNegative(incidence.other)
+            val target = totalVertices + targetLocal
+            val (slot, side) =
+              incidence.orientation match
+                case Orientation.Undirected =>
+                  (
+                    slotKey(
+                      math.min(localIndex, targetLocal),
+                      math.max(localIndex, targetLocal),
+                      false
+                    ),
+                    localIndex <= targetLocal
                   )
-          }
+                case Orientation.Outgoing => (slotKey(localIndex, targetLocal, true), true)
+                case Orientation.Incoming => (slotKey(targetLocal, localIndex, true), false)
+            val edgeIndex = slots.consume(slot, side)
+            if edgeIndex >= 0 then
+              adjacencyTargets += target
+              adjacencyEdges += edgeIndex
+              adjacencyOrientations += orientationByte(incidence.orientation)
+            else
+              failure = Some(
+                PackedCorpusError.UnmatchedIncidence(
+                  sample.key,
+                  vertex,
+                  incidence.other,
+                  incidence.orientation
+                )
+              )
+            incidenceIndex += 1
           adjacencyOffsets += adjacencyTargets.size
           localIndex += 1
 
         // Every created edge must have been consumed exactly once per endpoint side.
         if failure.isEmpty then
-          created.iterator
-            .collectFirst {
-              case (slot, edges)
-                  if cursors.getOrElse((slot, true), 0) != edges.size ||
-                    (slot.lower != slot.upper || slot.directed) &&
-                    cursors.getOrElse((slot, false), 0) != edges.size =>
-                slot
-            }
-            .foreach { slot =>
-              failure = Some(
-                PackedCorpusError.UnmatchedIncidence(
-                  sample.key,
-                  originalVertices.result()(slot.lower),
-                  originalVertices.result()(slot.upper),
-                  if slot.directed then Orientation.Outgoing else Orientation.Undirected
-                )
+          slots.firstUnmatched().foreach { slot =>
+            val lower = slotLower(slot)
+            val upper = slotUpper(slot)
+            failure = Some(
+              PackedCorpusError.UnmatchedIncidence(
+                sample.key,
+                vertices(lower),
+                vertices(upper),
+                if slotDirected(slot) then Orientation.Outgoing else Orientation.Undirected
               )
-            }
+            )
+          }
 
         totalVertices = nextTotal.toInt
         graphOffsets += totalVertices
@@ -302,12 +499,12 @@ private[grakern] object PackedGraphCorpus:
     failure.toLeft(
       new PackedGraphCorpus(
         sampleKeys,
-        graphOffsets.toArray,
-        adjacencyOffsets.toArray,
-        adjacencyTargets.toArray,
-        adjacencyEdges.toArray,
-        adjacencyOrientations.toArray,
-        vertexOwners.toArray,
+        graphOffsets.result(),
+        adjacencyOffsets.result(),
+        adjacencyTargets.result(),
+        adjacencyEdges.result(),
+        adjacencyOrientations.result(),
+        vertexOwners.result(),
         originalVertices.result(),
         nodeValues.result(),
         packedEdges.result()

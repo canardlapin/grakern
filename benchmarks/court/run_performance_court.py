@@ -293,19 +293,37 @@ def compute_calibration(sample_count: int) -> dict[str, float]:
     }
 
 
+def interpret_macos_power_mode(output: str) -> tuple[bool | None, str]:
+    low_power_matches = re.findall(r"\blowpowermode\s+(\d+)", output)
+    if low_power_matches:
+        values = [int(value) for value in low_power_matches]
+        return all(value == 0 for value in values), (
+            "pmset active lowpowermode=" + ",".join(map(str, values))
+        )
+
+    power_matches = re.findall(r"\bpowermode\s+(\d+)", output)
+    if power_matches:
+        values = [int(value) for value in power_matches]
+        # Current macOS uses 0=automatic, 1=low power, and 2=high power.
+        # The court requires that the active profile is not power-limited; it
+        # does not require forcing high-power mode on hosts where it exists.
+        return all(value != 1 for value in values), (
+            "pmset active powermode=" + ",".join(map(str, values))
+        )
+
+    return None, "pmset did not report an active power mode"
+
+
 def macos_power_mode() -> tuple[bool | None, str]:
     completed = subprocess.run(
-        ["pmset", "-g", "custom"],
+        ["pmset", "-g"],
         check=False,
         capture_output=True,
         text=True,
     )
     if completed.returncode != 0:
         return None, completed.stderr.strip() or "pmset failed"
-    matches = re.findall(r"\blowpowermode\s+(\d+)", completed.stdout)
-    if not matches:
-        return None, "pmset did not report lowpowermode"
-    return all(value == "0" for value in matches), "pmset lowpowermode"
+    return interpret_macos_power_mode(completed.stdout)
 
 
 def linux_power_mode() -> tuple[bool | None, str]:

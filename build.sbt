@@ -64,7 +64,7 @@ lazy val galeCoreJVM = ProjectRef(galeBuild, "coreJVM")
 
 lazy val root = tlCrossRootProject
   .aggregate(core, graph4sAdapter, standard, laws)
-  .aggregate(engineJVM, architectureProbes, benchmarkWorker)
+  .aggregate(engineJVM, architectureProbes, examplesJVM, benchmarkWorker)
 
 lazy val core = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -97,7 +97,14 @@ lazy val standard = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .in(file("standard"))
   .dependsOn(core, graph4sAdapter % "test->compile")
   .settings(strictSettings)
-  .settings(name := "grakern-standard")
+  .settings(
+    name := "grakern-standard",
+    libraryDependencies ++= Seq(
+      "io.circe" %%% "circe-core" % CirceV % Test,
+      "io.circe" %%% "circe-generic" % CirceV % Test,
+      "io.circe" %%% "circe-parser" % CirceV % Test
+    )
+  )
 
 lazy val laws = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
@@ -128,6 +135,15 @@ lazy val architectureProbes = project
     publish / skip := true
   )
 
+lazy val examplesJVM = project
+  .in(file("examples-jvm"))
+  .dependsOn(engineJVM)
+  .settings(strictSettings)
+  .settings(
+    name := "grakern-examples-jvm",
+    publish / skip := true
+  )
+
 lazy val benchmarkWorker = project
   .in(file("benchmark-worker"))
   .dependsOn(engineJVM)
@@ -151,7 +167,7 @@ addCommandAlias(
       .flatMap(module =>
         List("JVM", "JS", "Native").map(platform => s"$module$platform/compile")
       ) ++
-      List("engineJVM/compile", "architectureProbes/compile")
+      List("engineJVM/compile", "architectureProbes/compile", "examplesJVM/compile")
       ++ List("benchmarkWorker/compile")
   ).mkString(";", ";", "")
 )
@@ -161,7 +177,7 @@ addCommandAlias(
   (
     List("core", "graph4sAdapter", "standard", "laws")
       .flatMap(module => List("JVM", "JS", "Native").map(platform => s"$module$platform/test")) ++
-      List("engineJVM/test", "architectureProbes/test")
+      List("engineJVM/test", "architectureProbes/test", "examplesJVM/test")
       ++ List("benchmarkWorker/test")
   ).mkString(";", ";", "")
 )

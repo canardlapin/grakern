@@ -36,6 +36,7 @@ final class WLPlanReport private[engine] (
     val gramRealization: String,
     val gramExecution: GramExecution,
     val operatorRealization: KernelOperatorRealization,
+    val strategy: WLExecutionStrategy,
     val cost: WLPlanCostEstimate,
     val memory: WLPlanMemoryEstimate,
     val executionStats: WLExecutionStats
@@ -77,6 +78,12 @@ final class WLPlanReport private[engine] (
           s"  features: $sampleCount x $featureCount, nnz=$featureNonZeros, density=$featureDensity",
           s"  gram: $gramRealization",
           s"  gram execution: ${gramExecution.description}",
+          s"  gram strategy: ${strategy.gram.description}",
+          s"  query strategy: ${strategy.query.description}",
+          s"  optimal-assignment strategy: ${strategy.optimalAssignment}",
+          s"  requested output: ${strategy.requestedOutput}",
+          s"  anticipated query novelty: ${strategy.anticipatedQueryNovelty.fraction}",
+          s"  strategy decision: ${strategy.decision}",
           s"  operator: $operatorRealization",
           s"  normalization: $normalized",
           s"  query alignment: frozen dictionary with novel squared norm = $queryAlignmentRetainsNovelNorm",
@@ -85,6 +92,12 @@ final class WLPlanReport private[engine] (
           s"  materialized gram bytes: ${memory.materializedGramBytes}",
           s"  gram pairs: ${cost.gramPairs}",
           s"  operator intermediate dimension: ${cost.operatorIntermediateDimension}",
+          "candidate estimates:"
+        ) ++
+        strategy.estimates.map { estimate =>
+          s"  ${estimate.realization}: multiply-adds=${estimate.multiplyAdds}, working-bytes=${estimate.workingBytes}, admitted=${estimate.admitted}, reason=${estimate.reason}"
+        } ++
+        Vector(
           "execution:",
           s"  refinement executions: ${executionStats.refinementExecutions}",
           s"  subtree extractions: ${executionStats.subtreeExtractions}",
@@ -134,6 +147,7 @@ private[grakern] object WLPlanReport:
       features: FeatureMatrix[Coordinate, Metadata],
       operator: KernelOperator,
       gramExecution: GramExecution,
+      strategy: WLExecutionStrategy,
       executionStats: WLExecutionStats
   ): WLPlanReport =
     val sampleCount = features.values.rows
@@ -165,6 +179,7 @@ private[grakern] object WLPlanReport:
       gramRealization = "deterministic exact feature row products",
       gramExecution,
       operator.realization,
+      strategy,
       WLPlanCostEstimate(
         nonZeros.toLong,
         gramPairs,

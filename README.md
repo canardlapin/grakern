@@ -12,6 +12,12 @@ The semantic core is:
 Kernel + Decomposition + Refinement + Hierarchy + Compiler
 ```
 
+> **Maturity:** `0.1-development`, source-only, and not yet published. The walking slice is
+> executable, but the public kernel family and release surface are still being formed; APIs and
+> package boundaries may change. The planned `0.1.0-M1` milestone is dependency-blocked until
+> Graph4s and Gale are available as immutable artifacts; see the
+> [release manifest](docs/release-manifest.md).
+
 ## Current executable slice
 
 - lawful `Kernel`, `StrongKernel`, hierarchy, and padded optimal assignment;
@@ -26,7 +32,7 @@ Kernel + Decomposition + Refinement + Hierarchy + Compiler
 - exact WL signatures with collision resolution, parent links, immutable query
   overlays, subtree features, and threshold-expanded OA features;
 - normalized direct-sum WL preparation with Gale CSR, Gram, operator, cross,
-  novel-query norm retention, provenance, and plan reports;
+  novel-query norm retention, typed feature metadata, and plan reports;
 - decomposition-backed vertex and edge histograms with exact sparse features
   and graph-scoped witnesses;
 - deterministic parallel Gram tiles whose scheduling does not change a
@@ -65,9 +71,10 @@ val operator = prepared.operator
 println(prepared.planReport.explain)
 ```
 
-`architecture-probes/WalkingSliceExamples.scala` compiles the portable example
-against the production API. The engine suites compile and execute the
-preparation example.
+[`AlphaWalkthrough.scala`](examples-jvm/src/main/scala/grakern/examples/AlphaWalkthrough.scala)
+compiles and executes the complete preparation, query, centering,
+shortest-path, provenance, identity, and plan-report workflow. The architecture
+probes separately compile the portable API boundary.
 
 ## Modules and platform boundary
 
@@ -83,8 +90,8 @@ Gale owns numerical containers. Grakern owns feature and sample identity,
 alignment, provenance, numerical audits, and plan explanation. Ravel is not a
 dependency.
 
-The six accepted decisions live in [`docs/adr`](docs/adr). A compact execution
-walkthrough is in
+Start with the [alpha user guide](docs/guide/index.md). The accepted decisions
+live in [`docs/adr`](docs/adr), and a compact execution walkthrough is in
 [`docs/architecture.md`](docs/architecture.md).
 
 ## Verification
@@ -100,6 +107,6 @@ Python nor Julia. Their pinned regeneration instructions live under
 ## Scope
 
 The JVM compiler remains deliberately closed. Histogram query alignment,
-shortest path, commute-time kernels, centering, approximation, and a public
+directed shortest paths, commute-time kernels, approximation, and a public
 lowering SPI are later milestones. External parity is compatibility evidence,
 never the semantic definition of a Grakern kernel.

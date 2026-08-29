@@ -1,0 +1,61 @@
+name: Performance smoke
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  correctness-and-allocation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@v7
+      - name: Verify court contracts and independent workload oracles
+        run: |
+          uv run --with psutil --with jsonschema \
+            python -m unittest discover -s benchmarks/court/tests -v
+          uv run --with jsonschema \
+            python -m unittest discover -s benchmarks/court/workloads/tests -v
+      - name: Require a receipt for every baseline movement
+        if: github.event_name == 'pull_request'
+        env:
+          PERFORMANCE_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: >-
+          python benchmarks/court/check_baseline_update.py
+          --base "$PERFORMANCE_BASE_SHA"
+      - name: Run focused Scala correctness checks
+        run: >-
+          sbt
+          'standardJVM/testOnly grakern.standard.wl.WLFeatureEmitterSuite'
+          'engineJVM/testOnly grakern.engine.WLFeatureEmitterParitySuite
+          grakern.engine.WLExecutionPlannerSuite
+          grakern.engine.WLQueryAlignmentSuite'
+          benchmarkWorker/test
+      - name: Enforce the sparse-query allocation ratchet
+        run: >-
+          sbt
+          'benchmarkWorker/runMain grakern.benchmark.QueryOverlayBench
+          --baseline benchmarks/court/baselines/query-overlay.json
+          --output /tmp/grakern-query-overlay-smoke.json'
+      - name: Preserve the smoke receipt
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: performance-smoke-${{ github.run_id }}
+          path: /tmp/grakern-query-overlay-smoke.json
+          if-no-files-found: warn
+          retention-days: 30

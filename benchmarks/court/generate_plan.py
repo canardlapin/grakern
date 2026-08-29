@@ -185,6 +185,9 @@ def implementation_command(
         return (
             [
                 str(java),
+                "-Xmx80m",
+                "-Xss256k",
+                "-XX:+UseSerialGC",
                 "-jar",
                 str(jar),
                 "--job",

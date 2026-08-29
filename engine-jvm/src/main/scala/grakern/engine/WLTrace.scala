@@ -19,10 +19,11 @@ final class WLTrace[V, NodeKey, EdgeKey] private[engine] (
     private[engine] val sources: Vector[WLSource[V]],
     private[engine] val levels: Vector[Vector[WLColour]],
     private[grakern] val interner: WLInterner[NodeKey, EdgeKey]
-):
+) extends WLFeatureTrace[NodeKey, EdgeKey]:
   def rounds: Int = levels.size - 1
   def vertexCount: Int = sources.size
   def signatureCount: Int = interner.size
+  def allColours: Vector[WLColour] = interner.colours
 
   def source(vertexIndex: Int): Option[WLSource[V]] =
     sources.lift(vertexIndex)
@@ -60,30 +61,42 @@ final class WLTrace[V, NodeKey, EdgeKey] private[engine] (
       colours <- levels.lift(level)
     yield range.iterator.map(colours).toVector
 
+  override def foreachGraphColour(graphIndex: Int, level: Int)(
+      f: WLColour => Unit
+  ): Boolean =
+    (graphRanges.lift(graphIndex), levels.lift(level)) match
+      case (Some(range), Some(colours)) =>
+        var vertexIndex = range.start
+        while vertexIndex < range.end do
+          f(colours(vertexIndex))
+          vertexIndex += 1
+        true
+      case _ => false
+
 private[grakern] object WLTrace:
-  /** The refinement neighbourhood of one packed vertex: its adjacency entries in incidence order,
-    * each carrying the projected edge key and the orientation relative to that vertex.
-    */
-  private[engine] def incidentKeys[V, N, E, NodeKey, EdgeKey](
+  final private[engine] class PackedIncidenceView[V, N, E, EdgeKey](
       packed: PackedGraphCorpus[V, N, E],
-      refinement: WLRefinement[N, E, NodeKey, EdgeKey]
-  ): Array[Vector[(Int, EdgeKey, Orientation)]] =
-    val edgeKeys = packed.packedEdges.map(edge => refinement.edgeKey(edge.value))
-    Array.tabulate(packed.vertexCount) { vertexIndex =>
-      val builder = Vector.newBuilder[(Int, EdgeKey, Orientation)]
-      var adjacencyIndex = packed.adjacencyStart(vertexIndex)
-      val end = packed.adjacencyEnd(vertexIndex)
-      while adjacencyIndex < end do
-        builder += (
-          (
-            packed.adjacencyTarget(adjacencyIndex),
-            edgeKeys(packed.adjacencyEdge(adjacencyIndex)),
-            packed.adjacencyOrientation(adjacencyIndex)
-          )
-        )
-        adjacencyIndex += 1
-      builder.result()
-    }
+      edgeKeys: Vector[EdgeKey]
+  ) extends WLIncidenceView[EdgeKey]:
+    private var start = 0
+    private var end = 0
+    private var colours = Vector.empty[WLColour]
+
+    def select(vertexIndex: Int, previous: Vector[WLColour]): Unit =
+      start = packed.adjacencyStart(vertexIndex)
+      end = packed.adjacencyEnd(vertexIndex)
+      colours = previous
+
+    def size: Int = end - start
+
+    def edgeKey(index: Int): EdgeKey =
+      edgeKeys(packed.adjacencyEdge(start + index))
+
+    def orientation(index: Int): Orientation =
+      packed.adjacencyOrientation(start + index)
+
+    def colour(index: Int): WLColour =
+      colours(packed.adjacencyTarget(start + index))
 
   def prepare[
       V,
@@ -113,7 +126,10 @@ private[grakern] object WLTrace:
   ): Either[WLTraceError[V], WLTrace[V, NodeKey, EdgeKey]] =
     val nodeKeys =
       packed.categoricalNodeColumn(value => refinement.nodeKey(value))
-    val incident = incidentKeys(packed, refinement)
+    val edgeKeys =
+      packed.packedEdges.map(edge => refinement.edgeKey(edge.value))
+    val neighbourhood =
+      new PackedIncidenceView(packed, edgeKeys)
     val sources =
       Vector.tabulate(packed.vertexCount) { vertexIndex =>
         WLSource(
@@ -124,7 +140,13 @@ private[grakern] object WLTrace:
     val interner =
       WLInternerBuilder.empty(
         refinement.codecs,
-        refinement.hashing
+        refinement.hashing,
+        expectedSignatures = math
+          .min(
+            Int.MaxValue.toLong,
+            packed.vertexCount.toLong * (refinement.rounds.toLong + 1L)
+          )
+          .toInt
       )
     val initial = Vector.newBuilder[WLColour]
     nodeKeys.foreach { key =>
@@ -133,38 +155,24 @@ private[grakern] object WLTrace:
     var allLevels = Vector(initial.result())
     var previous = allLevels.head
     var round = 1
-    var failure: Option[WLTraceError[V]] = None
 
-    while round <= refinement.rounds && failure.isEmpty do
+    while round <= refinement.rounds do
       val current = Vector.newBuilder[WLColour]
       var vertexIndex = 0
-      while vertexIndex < packed.vertexCount && failure.isEmpty do
-        val neighbourhood =
-          incident(vertexIndex).map { case (target, edgeKey, orientation) =>
-            WLIncidence(edgeKey, orientation, previous(target))
-          }
-        interner.internRefined(
+      while vertexIndex < packed.vertexCount do
+        neighbourhood.select(vertexIndex, previous)
+        val colour = interner.internRefinedViewTrusted(
           previous(vertexIndex),
           neighbourhood
-        ) match
-          case Right(colour) =>
-            current += colour
-          case Left(error) =>
-            failure = Some(
-              WLTraceError.Interning(
-                round,
-                sources(vertexIndex),
-                error
-              )
-            )
+        )
+        current += colour
         vertexIndex += 1
       val completed = current.result()
-      if failure.isEmpty then
-        allLevels = allLevels :+ completed
-        previous = completed
+      allLevels = allLevels :+ completed
+      previous = completed
       round += 1
 
-    failure.toLeft(
+    Right(
       new WLTrace(
         refinement.planNodeId,
         packed.sampleKeys,

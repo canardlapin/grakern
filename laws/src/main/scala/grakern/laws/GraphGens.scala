@@ -65,6 +65,31 @@ final case class LabelledGraph(
         renamed(permutation).edgeBag == thatBag
       }
 
+  /** Independent round-one WL signature histogram, expressed directly in graph data rather than
+    * through the production interner. It is used to generate arc reversals that 1-WL is actually
+    * capable of distinguishing; non-isomorphism alone is not sufficient for that claim.
+    */
+  def roundOneSignatureHistogram: Map[(String, Vector[(String, String, String)]), Int] =
+    Vector
+      .tabulate(vertexCount) { vertex =>
+        val incidences = edges.flatMap { case (source, target, edgeLabel) =>
+          if directed then
+            Vector(
+              Option.when(source == vertex)((edgeLabel, "out", labels(target))),
+              Option.when(target == vertex)((edgeLabel, "in", labels(source)))
+            ).flatten
+          else if source == vertex && target == vertex then
+            Vector((edgeLabel, "undirected", labels(vertex)))
+          else
+            Vector(
+              Option.when(source == vertex)((edgeLabel, "undirected", labels(target))),
+              Option.when(target == vertex)((edgeLabel, "undirected", labels(source)))
+            ).flatten
+        }.sorted
+        labels(vertex) -> incidences
+      }
+      .groupMapReduce(identity)(_ => 1)(_ + _)
+
   private def edgeBag: Map[(Int, Int, String), Int] =
     val normalized =
       if directed then edges
@@ -124,7 +149,7 @@ object GraphGens:
       o <- permutation(g.edges.size)
     yield Relabelling(g, p, o)
 
-  /** A directed graph and the index of an arc whose reversal is not an automorphism. */
+  /** A directed graph and an arc whose reversal changes the independent round-one WL histogram. */
   final case class ArcReversal(graph: LabelledGraph, arc: Int) derives CanEqual:
     def reversed: LabelledGraph = graph.reversedArc(arc)
 
@@ -135,7 +160,10 @@ object GraphGens:
         val candidates =
           g.edges.indices.filter { i =>
             val (s, t, _) = g.edges(i)
-            s != t && !g.isomorphicTo(g.reversedArc(i))
+            val reversed = g.reversedArc(i)
+            s != t &&
+            !g.isomorphicTo(reversed) &&
+            g.roundOneSignatureHistogram != reversed.roundOneSignatureHistogram
           }
         if candidates.isEmpty then Gen.fail
         else Gen.oneOf(candidates).map(ArcReversal(g, _))

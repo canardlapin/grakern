@@ -1,0 +1,75 @@
+name: Scheduled Tier-1 championship
+
+on:
+  schedule:
+    - cron: "41 4 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: grakern-tier1-championship
+  cancel-in-progress: false
+
+jobs:
+  tier1:
+    runs-on: [self-hosted, grakern-performance]
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: sbt
+      - uses: sbt/setup-sbt@v1
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: astral-sh/setup-uv@v7
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: "1"
+      - name: Build pinned comparator environments and measured worker
+        run: |
+          sbt benchmarkWorker/assembly
+          uv venv --python 3.11 /tmp/grakern-grakel-3.11
+          uv pip sync \
+            --python /tmp/grakern-grakel-3.11/bin/python \
+            tools/grakel/performance-requirements.txt
+          JULIA_DEPOT_PATH=/tmp/grakern-graphkernels-julia \
+            julia --project=tools/graphkernels-jl \
+            -e 'using Pkg; Pkg.instantiate()'
+      - name: Generate the immutable complete card
+        run: |
+          uv run --with jsonschema \
+            python benchmarks/court/generate_plan.py \
+            --court-id "grakern-tier1-${GITHUB_SHA}" \
+            --grakel-python /tmp/grakern-grakel-3.11/bin/python \
+            --julia-depot /tmp/grakern-graphkernels-julia \
+            --output /tmp/grakern-tier1-plan.json
+      - name: Enforce strict source and host admission
+        run: |
+          uv run --with psutil --with jsonschema \
+            python benchmarks/court/run_performance_court.py preflight \
+            /tmp/grakern-tier1-plan.json \
+            /tmp/grakern-tier1-court
+      - name: Run the complete correctness-locked race
+        run: |
+          uv run --with psutil --with jsonschema \
+            python benchmarks/court/run_performance_court.py run \
+            /tmp/grakern-tier1-plan.json \
+            /tmp/grakern-tier1-court
+      - name: Preserve the complete raw court
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: tier1-championship-${{ github.run_id }}
+          path: |
+            /tmp/grakern-tier1-plan.json
+            /tmp/grakern-tier1-court
+          if-no-files-found: warn
+          retention-days: 90
