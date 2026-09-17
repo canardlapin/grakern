@@ -1,112 +1,116 @@
 # Grakern
 
-Grakern is a graph-kernel calculus for Scala, not a catalogue of unrelated
-estimators. Its current walking slice proves that one exact Weisfeiler–Lehman
-refinement can feed both subtree and lawful optimal-assignment kernels, then
-compile to sparse Gale features, a Gram matrix, an operator, and query-aligned
-cross values without repeating refinement work.
+[User guide](docs/guide/index.md) ·
+[Executable example](examples-jvm/src/main/scala/grakern/examples/AlphaWalkthrough.scala) ·
+[Design decisions](docs/adr) ·
+[Changelog](CHANGELOG.md)
 
-The semantic core is:
+Grakern is a Scala library for measuring similarity between labelled graphs. A labelled graph
+might be a molecule whose nodes are atoms and edges are bonds, or any network where nodes and
+edges carry data. Grakern can produce a pairwise similarity matrix for a collection of graphs and
+then score new graphs against the same frozen feature space.
+
+A graph kernel gives a similarity score to a pair of graphs. Grakern currently provides exact
+Weisfeiler–Lehman (WL) and shortest-path kernels, together with a JVM engine that prepares sparse
+features, training Gram matrices, and aligned values for new graphs.
+
+> **Status:** Grakern is pre-release, source-only software on the `0.1` development line. Its APIs
+> may change, and no Maven artifacts have been published. The planned `0.1.0-M1` release remains
+> blocked on published Graph4s and Gale dependencies.
+
+## Quick start
+
+Clone the repository, then run the checked example with sbt:
+
+```bash
+sbt -batch \
+  'examplesJVM/test' \
+  'examplesJVM/runMain grakern.examples.AlphaExampleMain'
+```
+
+It prints:
 
 ```text
-Kernel + Decomposition + Refinement + Hierarchy + Compiler
+WL train=0.3055555555555556, query=0.1666666666666667, novelNorm=0.8333333333333335, features=23
+Shortest path train=2.0, features=2, provenance=2
 ```
 
-> **Maturity:** `0.1-development`, source-only, and not yet published. The walking slice is
-> executable, but the public kernel family and release surface are still being formed; APIs and
-> package boundaries may change. The planned `0.1.0-M1` milestone is dependency-blocked until
-> Graph4s and Gale are available as immutable artifacts; see the
-> [release manifest](docs/release-manifest.md).
+The example builds small labelled graphs, prepares a normalized WL kernel, computes training and
+query similarities, and inspects the resulting feature and provenance information. Its
+[complete source](examples-jvm/src/main/scala/grakern/examples/AlphaWalkthrough.scala) uses only
+the public API and is executed by the example test.
 
-## Current executable slice
+Production bytecode targets JDK 17. The repository CI uses Temurin 21; running the Scala Native
+tests also requires a native toolchain.
 
-- lawful `Kernel`, `StrongKernel`, hierarchy, and padded optimal assignment;
-- a topology-neutral `LabelledNeighbourhood` protocol in core (ADR-009):
-  vertices, total node values, and labelled incidences with orientation
-  relative to the vertex asked; `NeighbourhoodSample` builds validated
-  undirected, directed, and multi-edge inputs, and `GraphSample` is the
-  graph4s adapter (vertex identity separate from node values);
-- orientation-aware WL refinement: reversing a directed edge changes the
-  kernel, undirected inputs are bit-identical to the pre-protocol engine on
-  every committed parity fixture;
-- exact WL signatures with collision resolution, parent links, immutable query
-  overlays, subtree features, and threshold-expanded OA features;
-- normalized direct-sum WL preparation with Gale CSR, Gram, operator, cross,
-  novel-query norm retention, typed feature metadata, and plan reports;
-- decomposition-backed vertex and edge histograms with exact sparse features
-  and graph-scoped witnesses;
-- deterministic parallel Gram tiles whose scheduling does not change a
-  floating-point result bit;
-- independent scalar/Hungarian differential tests plus pinned GraKeL and
-  GraphKernels.jl compatibility fixtures.
+## What Grakern can do
 
-## Example
+- Build graph samples from graph4s or directly from Grakern's labelled-neighbourhood protocol.
+- Compare graphs with exact WL subtree kernels or a WL optimal-assignment kernel, and combine or
+  normalize those measures.
+- Prepare sparse feature matrices, Gram matrices, and matrix-vector operators on the JVM.
+- Score new graphs without rebuilding or altering the training representation, including correct
+  normalization when a query contains previously unseen features.
+- Build kernels from categorical or soft shortest paths and from node or edge histograms.
+- Inspect sample identity, feature metadata, provenance, numerical audit events, and an explanation
+  of the execution plan.
 
-The portable program is ordinary immutable Scala:
+The portable graph and kernel APIs run on the JVM, Scala.js, and Scala Native. Matrix preparation
+and the Gale-backed numerical views are currently JVM-only.
 
-```scala
-val refinement =
-  WLRefinement.create(
-    rounds = 2,
-    nodeKey = Projection.of[Atom, String](_.element),
-    edgeKey = Projection.of[Bond, Int](_.order),
-    codecs = WLCodecs[String, Int](None, None)
-  ).toOption.get
+## Modules
 
-val kernel =
-  (
-    refinement.subtree.weighted(subtreeWeight) +
-      refinement.optimalAssignment.weighted(assignmentWeight)
-  ).normalized
-```
-
-On the JVM engine:
-
-```scala
-val prepared = WLCompiler.plan(trainingSamples, kernel).run().toOption.get
-val trainK = prepared.gram
-val testK = prepared.cross(querySamples)
-val phi = prepared.features
-val operator = prepared.operator
-println(prepared.planReport.explain)
-```
-
-[`AlphaWalkthrough.scala`](examples-jvm/src/main/scala/grakern/examples/AlphaWalkthrough.scala)
-compiles and executes the complete preparation, query, centering,
-shortest-path, provenance, identity, and plan-report workflow. The architecture
-probes separately compile the portable API boundary.
-
-## Modules and platform boundary
-
-| Module | Role | Platforms |
+| Module | Use it for | Platforms |
 |---|---|---|
-| `grakern-core` | kernel claims, decomposition, hierarchy, identity, the labelled-neighbourhood protocol | JVM, Scala.js, Native |
-| `grakern-graph4s` | graph4s adapter of the protocol (undirected simple graphs, total fields) | JVM, Scala.js, Native |
-| `grakern-standard` | WL and histogram recipes over the protocol (no graph4s dependency) | JVM, Scala.js, Native |
-| `grakern-laws` | portable semantic law support | JVM, Scala.js, Native |
-| `grakern-engine-jvm` | packed execution, Gale features/matrices/operators | JVM |
+| `grakern-core` | Kernel types, graph identity, and the labelled-neighbourhood input protocol | JVM, Scala.js, Native |
+| `grakern-graph4s` | Adapting graph4s graphs into Grakern samples | JVM, Scala.js, Native |
+| `grakern-standard` | WL, shortest-path, assignment, and histogram kernel recipes | JVM, Scala.js, Native |
+| `grakern-engine-jvm` | Preparing features, matrices, operators, queries, centering, and reports | JVM |
+| `grakern-laws` | Reusable laws, generators, and reference checks for kernel implementations | JVM, Scala.js, Native |
 
-Gale owns numerical containers. Grakern owns feature and sample identity,
-alignment, provenance, numerical audits, and plan explanation. Ravel is not a
+These are intended artifact boundaries, not currently published coordinates. Grakern owns graph
+sample identity, feature alignment, provenance, and plan reporting. Graph4s supplies the graph
+representation, and Gale supplies JVM numerical containers and operators. Ravel is not a
 dependency.
 
-Start with the [alpha user guide](docs/guide/index.md). The accepted decisions
-live in [`docs/adr`](docs/adr), and a compact execution walkthrough is in
-[`docs/architecture.md`](docs/architecture.md).
+## Fit and current limits
 
-## Verification
+Grakern is a good fit when you need more than opaque similarity scores: it keeps the kernel recipe,
+input order, feature mapping, and execution plan available for inspection. The current
+implementation is aimed at exact, in-memory graph kernels rather than a general estimator or model
+training framework.
+
+Histogram query alignment, directed shortest-path semantics, commute-time kernels, approximation,
+GPU execution, and a public lowering extension API are not part of the current surface. External
+GraKeL and GraphKernels.jl fixtures provide compatibility checks; they do not define Grakern's
+semantics. See the [alpha acceptance audit](docs/alpha-acceptance-audit.md) and
+[release manifest](docs/release-manifest.md) for the evidence and remaining release gates.
+
+## Documentation
+
+- [Run the executable examples](docs/guide/getting-started.md) — prerequisites, commands, and
+  expected output.
+- [Prepare and query a WL kernel](docs/guide/wl-prepared-workflow.md) — graph samples, shared
+  refinement, sparse features, queries, and centering.
+- [Use shortest-path kernels](docs/guide/shortest-path-workflow.md) — categorical paths, soft path
+  lengths, provenance, and explanations.
+- [Interpret identity, plans, and failures](docs/guide/identity-plans-and-failures.md) — durable
+  fingerprints, requested outputs, and explicit failure modes.
+- [Architecture](docs/architecture.md) and [ADRs](docs/adr) — module ownership and mathematical or
+  numerical guarantees.
+
+## Developing
+
+Run the complete supported-platform source gate with:
 
 ```bash
 sbt -batch scalafmtCheckAll compileAll testAll
 ```
 
-Ordinary tests read committed external-oracle fixtures and require neither
-Python nor Julia. Their pinned regeneration instructions live under
-`tools/grakel` and `tools/graphkernels-jl`.
+Ordinary tests use committed external-oracle fixtures and require neither Python nor Julia. Their
+regeneration tools and provenance are under [`tools/grakel`](tools/grakel) and
+[`tools/graphkernels-jl`](tools/graphkernels-jl).
 
-## Scope
+## License
 
-The JVM compiler remains deliberately closed. Histogram query alignment,
-directed shortest paths, commute-time kernels, approximation, and a public
-lowering SPI are later milestones. External parity is compatibility evidence,
-never the semantic definition of a Grakern kernel.
+Grakern is available under the [Apache License 2.0](LICENSE).
