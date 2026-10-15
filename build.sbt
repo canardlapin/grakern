@@ -10,7 +10,8 @@ val ScalaCheckV = "1.19.0"
 val CirceV = "0.14.14"
 
 val Graph4sRevision = "ea5d2d762f85f5a0f97ee188deb5fac0ef2bcbaf"
-val GaleRevision = "d55fe2f97196a76ab7879e1a12f1e92403aeba06"
+val Graph4sVersion = "0.1.0-RC1"
+val GaleVersion = "1.0.0-RC1"
 
 ThisBuild / tlBaseVersion := "0.1"
 ThisBuild / organization := "io.github.canardlapin"
@@ -44,23 +45,17 @@ lazy val strictSettings = Seq(
   )
 )
 
-// Unreleased dependencies are fetched from clean, immutable revisions. A local
-// sibling checkout is never part of the reproducible build contract.
+// JVM release artifacts use fixed Maven dependencies. JS and Native source builds
+// retain the verified source pin until those graph4s artifacts are separately released.
 lazy val graph4sBuild = uri(
   s"https://github.com/canardlapin/graph4s.git#$Graph4sRevision"
 )
-lazy val graph4sCoreJVM = ProjectRef(graph4sBuild, "coreJVM")
 lazy val graph4sCoreJS = ProjectRef(graph4sBuild, "coreJS")
 lazy val graph4sCoreNative = ProjectRef(graph4sBuild, "coreNative")
-lazy val graph4sIndexedJVM = ProjectRef(graph4sBuild, "indexedJVM")
 lazy val graph4sIndexedJS = ProjectRef(graph4sBuild, "indexedJS")
 lazy val graph4sIndexedNative = ProjectRef(graph4sBuild, "indexedNative")
-lazy val graph4sDataJVM = ProjectRef(graph4sBuild, "dataJVM")
 lazy val graph4sDataJS = ProjectRef(graph4sBuild, "dataJS")
 lazy val graph4sDataNative = ProjectRef(graph4sBuild, "dataNative")
-
-lazy val galeBuild = uri(s"https://github.com/canardlapin/gale.git#$GaleRevision")
-lazy val galeCoreJVM = ProjectRef(galeBuild, "coreJVM")
 
 lazy val root = tlCrossRootProject
   .aggregate(core, graph4sAdapter, standard, laws)
@@ -82,7 +77,10 @@ lazy val graph4sAdapter = crossProject(JVMPlatform, JSPlatform, NativePlatform)
   .crossType(CrossType.Pure)
   .in(file("graph4s-adapter"))
   .dependsOn(core)
-  .jvmConfigure(_.dependsOn(graph4sCoreJVM, graph4sIndexedJVM, graph4sDataJVM))
+  .jvmSettings(
+    libraryDependencies ++= Seq("graph4s-core", "graph4s-indexed", "graph4s-data")
+      .map(artifact => "io.github.canardlapin" %% artifact % Graph4sVersion)
+  )
   .jsConfigure(_.dependsOn(graph4sCoreJS, graph4sIndexedJS, graph4sDataJS))
   .nativeConfigure(
     _.dependsOn(graph4sCoreNative, graph4sIndexedNative, graph4sDataNative)
@@ -115,9 +113,12 @@ lazy val laws = crossProject(JVMPlatform, JSPlatform, NativePlatform)
 
 lazy val engineJVM = project
   .in(file("engine-jvm"))
-  .dependsOn(core.jvm, graph4sAdapter.jvm, standard.jvm, galeCoreJVM, laws.jvm % "test->compile")
+  .dependsOn(core.jvm, graph4sAdapter.jvm, standard.jvm, laws.jvm % "test->compile")
   .settings(strictSettings)
-  .settings(name := "grakern-engine-jvm")
+  .settings(
+    name := "grakern-engine-jvm",
+    libraryDependencies += "io.github.canardlapin" %% "gale-core" % GaleVersion
+  )
 
 lazy val architectureProbes = project
   .in(file("architecture-probes"))
